@@ -1,0 +1,63 @@
+---
+env:
+    name: LunarLander-v2
+
+model:
+    encoder:
+        units_list: []
+    q:
+        units_list: [128, 128]
+        activation: relu
+        layer_type: dense
+        duel: False
+agent:
+    algorithm: &algo dqn
+    replay_type: &replay per
+    batch_size: &bs 256
+    n_steps: &nsteps 3      # n-step target
+    gamma: &gamma 0.99
+
+    schedule_act_eps: False
+    act_eps: 0.3
+    eval_act_eps: 0
+
+    MAX_STEPS: 1e8          # maximum training steps
+    TRAIN_PERIOD: 1          # #frames = 4 agent step when frame skip = 4
+    EVAL_PERIOD: 5000
+    LOG_PERIOD: 5000
+    N_UPDATES: 1
+    RECORD: False
+
+    # model path: root_dir/model_name/models
+    # tensorboard path: root_dir/model_name/logs
+    # the following names are just examples; they will be reset in our training process
+    root_dir: *algo                         # root path for tensorboard logs
+    model_name: *algo
+
+    loss_type: huber   # huber or mse
+    target_update_period: 3000
+    tbo: False                              # transformed Bellman Operator
+    
+    # arguments for optimizer
+    optimizer: adam
+    schedule_lr: False
+    value_lr: 1e-4
+    clip_norm: 10
+    
+    # arguments for PER
+    per_alpha: 0.5
+    per_epsilon: 1e-4
+
+replay:
+    replay_type: *replay
+    # arguments for PER
+    beta0: 0.4
+    to_update_top_priority: True
+
+    # arguments for general replay
+    n_steps: *nsteps
+    gamma: *gamma
+    batch_size: *bs
+    min_size: 1e4
+    capacity: 1e5
+    has_next_obs: False

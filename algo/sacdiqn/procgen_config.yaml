@@ -1,0 +1,118 @@
+---
+env:
+    name: procgen_coinrun
+    distribution_mode: easy
+    frame_skip: 1
+    n_envs: &ne 64
+    frame_stack: 1
+    np_obs: True
+    reward_scale: 2
+    reward_clip: 10
+
+model:
+    encoder: 
+        cnn_name: impala
+    actor:
+        units_list: [512]
+        layer_type: dense
+        norm: null
+        kernel_initializer: glorot_uniform
+        activation: relu
+    quantile:
+        tau_embed_size: 64
+        phi_activation: relu
+        N: &K 64
+    q:
+        units_list: [512]
+        layer_type: dense
+        norm: null
+        kernel_initializer: glorot_uniform
+        activation: relu
+        duel: False
+    temperature:
+        temp_type: constant
+        value: .01
+    twin_q: False
+    reward_kl: False
+
+agent:
+    algorithm: &algo sacdiqn
+    replay_type: &replay per
+    gamma: &gamma .99
+    batch_size: &bs 64
+    n_steps: &nsteps 3      # n-step target
+    target_entropy_coef: .8
+
+    probabilistic_regularization: entropy
+    
+    schedule_act_eps: True
+    act_eps_type: line
+    act_eps: .3
+    eval_act_eps: 0
+    schedule_act_temp: True
+    n_exploit_envs: 32
+    min_temp: .5
+    max_temp: 10
+
+    MAX_STEPS: 2.5e7
+    TRAIN_PERIOD: 1
+    EVAL_PERIOD: 2.5e5
+    LOG_PERIOD: 2.5e5
+    N_UPDATES: 1
+    RECORD: True
+    N_EVAL_EPISODES: 200
+
+    normalize_reward: False
+    return_stats: True
+    logger: True
+
+    # IQN params
+    N: 64                # N in paper, num of quantiles for online quantile network
+    N_PRIME: 64          # N' in paper, num of quantiles for target quantile network
+    K: *K               # K in paper, num of quantiles for action selection
+    KAPPA: 1            # 𝜅 in paper, used as the threshold for the huber loss
+
+    # model path: root_dir/model_name/models
+    # tensorboard path: root_dir/model_name/logs
+    # the following names are just examples; they will be reset in our training process
+    root_dir: *algo                         # root path for tensorboard logs
+    model_name: *algo
+
+    target_update_period: 1500
+
+    soft_target: True
+
+    # arguments for optimizer
+    optimizer: adam
+    schedule_lr: False
+    value_lr: 2.5e-4
+    actor_lr: 2.5e-4
+    temp_lr: 2.5e-4
+    weight_decay: null
+    clip_norm: 0
+    opt_eps: 1e-7
+    prior_lr: 1.e-3
+
+    # arguments for PER
+    per_alpha: .6
+    per_epsilon: 1e-4
+    use_is_ratio: &is False
+
+replay:
+    replay_type: *replay
+    seqlen: 10
+    n_envs: *ne
+    # arguments for PER
+    beta0: .4
+    beta_steps: 1e6
+    to_update_top_priority: True
+    use_is_ratio: *is
+
+    # arguments for general replay
+    n_steps: *nsteps
+    max_steps: 3
+    gamma: *gamma
+    batch_size: *bs
+    min_size: 1600
+    capacity: 2.5e5
+    has_next_obs: True

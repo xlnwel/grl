@@ -1,0 +1,95 @@
+---
+env:
+    name: atari_pong
+    sticky_actions: False
+    frame_skip: 4
+    frame_stack: 4
+    life_done: True
+    reward_clip: True
+    seed: 0
+
+model:
+    encoder: 
+        cnn_name: nature
+        out_size: null
+        kernel_initializer: glorot_uniform
+    actor:
+        units_list: [512]
+        kernel_initializer: glorot_uniform
+        activation: relu
+    q:
+        units_list: [512]
+        kernel_initializer: glorot_uniform
+        activation: relu
+        duel: False
+
+        tau_embed_size: 64
+        phi_activation: relu
+        K: &K 32
+    temperature:
+        temp_type: 'constant'
+        value: .01
+
+agent:
+    algorithm: &algo sacdiqn
+    replay_type: &replay per
+    gamma: &gamma .99
+    batch_size: &bs 32
+    n_steps: &nsteps 1      # n-step target
+    precision: &prec 32
+    schedule_act_eps: True
+    act_eps: .01
+    eval_act_eps: 0
+    target_entropy_coef: .8
+    
+    MAX_STEPS: 1e8
+    TRAIN_PERIOD: 16    # #frames = 4 agent step when frame skip = 4
+    EVAL_PERIOD: 5e5
+    LOG_PERIOD: 1e5
+    N_UPDATES: 1
+    RECORD: True
+
+    
+
+    # IQN params
+    N: 32                # N in paper, num of quantiles for online quantile network
+    N_PRIME: 32          # N' in paper, num of quantiles for target quantile network
+    K: *K               # K in paper, num of quantiles for action selection
+    KAPPA: 1            # 𝜅 in paper, used as the threshold for the huber loss
+
+    # model path: root_dir/model_name/models
+    # tensorboard path: root_dir/model_name/logs
+    # the following names are just examples; they will be reset in our training process
+    root_dir: *algo                         # root path for tensorboard logs
+    model_name: *algo
+
+    target_update_period: 2000
+    tbo: False
+
+    # arguments for optimizer
+    optimizer: adam
+    schedule_lr: False
+    value_lr: 5e-5
+    clip_norm: 40
+    actor_lr: 5e-5
+    temp_lr: 3e-4
+    opt_eps: 3.125e-4
+    
+    # arguments for PER
+    per_alpha: .5
+    per_epsilon: 1e-4
+
+replay:
+    replay_type: *replay
+    # arguments for PER
+    beta0: .4
+    beta_steps: 1e5
+    to_update_top_priority: True
+
+    # arguments for general replay
+    n_steps: *nsteps
+    gamma: *gamma
+    batch_size: *bs
+    min_size: 1600
+    capacity: 1e5
+    has_next_obs: False

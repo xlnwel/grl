@@ -1,0 +1,99 @@
+---
+env:
+    name: LunarLander-v2
+    seed: 0
+    n_envs: 4   # do not support n_envs = 1, don't want to complicate the code
+
+model:
+    encoder:
+        units_list: [128]
+    rnn:
+        units: 64
+    actor:
+        units_list: [64]
+        activation: relu
+    q:
+        units_list: [64]
+        activation: relu
+        duel: True
+        stoch_action: False
+        tau: &tau 0.01
+
+agent:
+    algorithm: &algo rdqn
+    replay_type: &replay seq
+    gamma: 0.99
+    lambda: 1
+    precision: 32
+    batch_size: &bs 32
+    
+    MUNCHAUSEN: False   # whether to use munchausen rl target
+    probabilistic_regularization: null
+
+    tau: *tau
+    alpha: .9
+    clip_logpi_min: -1
+
+    schedule_act_eps: True
+    act_eps_type: apex
+    act_eps: .3
+    eval_act_eps: 0
+    schedule_act_temp: False
+    n_exploit_envs: 8
+    min_temp: .5
+    max_temp: 10
+    eval_act_temp: .5
+
+    store_state: True
+    burn_in: False
+    sample_size: &ss 60
+    burn_in_size: &bis 20
+    schedule_act_eps: False
+    additional_rnn_inputnput: False
+    act_eps: 0.3
+
+    MAX_STEPS: 3e6          # maximum training steps
+    LOG_PERIOD: 1e4
+    EVAL_PERIOD: 5e5
+    TRAIN_PERIOD: 50
+    N_UPDATES: 10
+
+    # model path: root_dir/model_name/models
+    # tensorboard path: root_dir/model_name/logs
+    # the following names are just examples; they will be reset in our training process
+    root_dir: *algo                         # root path for tensorboard logs
+    model_name: *algo
+
+    loss_type: mse   # huber or mse
+    target_update_period: 3000
+    tbo: False                              # transformed Bellman Operator
+    
+    loo_c: 1.
+    tau: *tau
+    # arguments for optimizer
+    optimizer: adam
+    schedule_lr: False
+    actor_lr: 2.5e-4
+    value_lr: 2.5e-4
+    opt_eps: 1e-4
+    clip_norm: 10
+
+    # arguments for PER
+    per_alpha: .9
+    per_eta: .9
+    per_epsilon: 1e-4
+
+replay:
+    replay_type: *replay
+    # arguments for PER
+    beta0: 0
+    to_update_top_priority: False
+
+    # arguments for general replay
+    batch_size: *bs
+    sample_size: *ss
+    burn_in_size: *bis
+    min_size: 500
+    capacity: 10000
+    state_keys: ['h', 'c']
+    extra_keys: ['obs', 'action', 'mu', 'mask']

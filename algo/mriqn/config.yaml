@@ -1,0 +1,71 @@
+---
+env:
+    name: LunarLander-v2
+    seed: 0
+    precision: &prec 32
+
+model:
+    cnn_name: null
+    shared_units: [128]
+    lstm_units: 64
+    units_list: [64]
+    activation: relu
+    duel: True
+
+agent:
+    algorithm: &algo rdqn
+    replay_type: &replay 'sper'
+    gamma: 0.99
+    lambda: .95
+    precision: *prec
+    batch_size: &bs 16
+
+    store_state: True
+    burn_in: True
+    sample_size: &ss 60
+    burn_in_size: &bis 20
+    schedule_act_eps: False
+    additional_rnn_inputnput: False
+    act_eps: 0.3
+
+    MAX_STEPS: 1e7          # maximum training steps
+    LOG_PERIOD: 1e4
+    EVAL_PERIOD: 5e5
+    TRAIN_PERIOD: 50
+    N_UPDATES: 10
+
+    # model path: root_dir/model_name/models
+    # tensorboard path: root_dir/model_name/logs
+    # the following names are just examples; they will be reset in our training process
+    root_dir: *algo                         # root path for tensorboard logs
+    model_name: *algo
+
+    loss_type: mse   # huber or mse
+    target_update_period: 3000
+    tbo: False                              # transformed Bellman Operator
+    
+    # arguments for optimizer
+    optimizer: adam
+    schedule_lr: False
+    lr: 1e-4
+    opt_eps: 1e-4
+    clip_norm: 10
+
+    # arguments for PER
+    per_alpha: .9
+    per_eta: .9
+    per_epsilon: 1e-4
+
+replay:
+    replay_type: *replay
+    precision: *prec
+    # arguments for PER
+    beta0: 0
+    to_update_top_priority: False
+
+    # arguments for general replay
+    batch_size: *bs
+    sample_size: *ss
+    burn_in_size: *bis
+    min_size: 500
+    capacity: 10000

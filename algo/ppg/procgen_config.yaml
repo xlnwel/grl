@@ -1,0 +1,88 @@
+---
+env:
+    name: &env_name procgen_coinrun
+    n_workers: 1
+    n_envs: &nenvs 64
+    frame_skip: 1
+    frame_stack: 1
+    # num_levels: 200
+
+model:
+    architecture: shared
+    encoder: 
+        cnn_name: impala
+        out_size: 256
+    actor:
+        units_list: []
+        norm: null
+        kernel_initializer: orthogonal
+        activation: relu
+    value:
+        units_list: []
+        norm: null
+        kernel_initializer: orthogonal
+        activation: relu
+
+agent:
+    algorithm: &algo ppg
+    precision: 32
+    gamma: &gamma .999
+    
+    MAX_STEPS: 2.5e7
+    N_STEPS: &nsteps 256
+    N_PI: &npi 32           # 32
+    N_SEGS: &nsegs 32        # this should be no greater than N_PI. 
+    N_EPOCHS: 1
+    N_MBS: &nmbs 8
+    N_AUX_EPOCHS: 6
+    N_AUX_MBS_PER_SEG: &nambs 16    # 16
+    LOG_PERIOD: 40
+    EVAL_PERIOD: 40
+    max_kl: 0            # early stop when max_kl is violated. 0 or null suggests unbound
+    
+    normalize_obs: False
+    normalize_reward: True
+    # (once, reuse, null)
+    # "once" updates values at the end of each epoch
+    # "reuse" updates values using value from learn, which is staler than once
+    # null doesn't update values.
+    value_update: null
+    # recompute targets before the auxiliary phase
+    AUX_RECOMPUTE: False
+
+    # model path: root_dir/model_name/models
+    # tensorboard path: root_dir/model_name/logs
+    # the following names are just examples; they will be reset in our training process
+    root_dir: *algo                         # root path for tensorboard logs
+    model_name: *algo
+    RECORD: True
+    
+    # arguments for optimizer
+    optimizer: adam
+    schedule_lr: False
+    actor_lr: 5e-4
+    aux_lr: 5e-4
+    value_lr: 5e-4
+    clip_norm: 0.5
+    opt_eps: 1e-7
+    # arguments for loss
+    value_loss: clip
+    clip_range: .2          # clip range for ppo
+    entropy_coef: .01
+    bc_coef: 1.
+
+buffer:
+    N_PI: *npi
+    N_SEGS: *npi
+    N_AUX_MBS_PER_SEG: *nambs
+
+    adv_type: gae     # nae or gae
+    gamma: *gamma
+    lam: .95
+    n_envs: *nenvs
+    N_STEPS: *nsteps
+    N_MBS: *nmbs        # number of minibatches
+    sample_keys: [obs, action, value, traj_ret, advantage, logpi]
+    transfer_keys: [obs, reward, discount, traj_ret]
+    aux_sample_keys: [obs, logits, value, traj_ret]
+    # mini-batch size = n_workers * n_envs * epslen / n_mbs

@@ -1,0 +1,87 @@
+---
+env:
+    name: atari_breakout
+    sticky_actions: False
+    frame_skip: 4
+    frame_stack: 4
+    np_obs: True
+    life_done: True
+    reward_clip: True
+    n_envs: 4
+    seed: 0
+
+model:
+    encoder:
+        cnn_name: nature
+        out_size: null
+        kernel_initializer: glorot_uniform
+
+agent:
+    algorithm: &algo apex-fqf
+    replay_type: &replay uniform
+    batch_size: &bs 64
+    gamma: &gamma 0.99
+    n_steps: &nsteps 3      # n-step target
+    precision: &prec 32
+    schedule_act_eps: True
+    act_eps_type: apex
+    act_eps: .4
+    eval_act_eps: .001
+    
+    # timer&interval
+    MAX_STEPS: 1e9
+    LOG_PERIOD: 100
+    N_UPDATES: 1
+    SYNC_PERIOD: 400
+    RECORD_PERIOD: 100
+    N_EVALUATION: 10
+    logger: True
+
+    # distributed algo params
+    n_learner_cpus: 1
+    n_learner_gpus: .3
+    n_workers: 5
+    n_worker_cpus: 1
+    n_worker_gpus: .1
+    
+    run_mode: nsteps
+    worker_side_prioritization: False
+
+    # model path: root_dir/model_name/models
+    # tensorboard path: root_dir/model_name/logs
+    # the following names are just examples; they will be reset in our training process
+    root_dir: *algo                         # root path for tensorboard logs
+    model_name: *algo
+
+    target_update_period: 1500
+    tbo: False
+
+    # arguments for optimizer
+    q_opt: adam
+    schedule_lr: False
+    value_lr: 5e-5
+    fpn_opt: rmsprop
+    fpn_lr: 2.5e-9
+    ent_coef: .001
+    clip_norm: 40
+
+    # arguments for PER
+    per_alpha: .5
+    per_epsilon: 1e-4
+
+replay:
+    replay_type: *replay
+    seqlen: 100
+    precision: 32
+
+    # arguments for PER
+    beta0: 0.4
+    to_update_top_priority: False
+
+    # arguments for general replay
+    n_steps: *nsteps
+    gamma: *gamma
+    batch_size: *bs
+    min_size: 5e4
+    capacity: 1e5
+    has_next_obs: True

@@ -1,0 +1,77 @@
+---
+env:
+    name: atari_pong
+    sticky_actions: False
+    frame_skip: 4
+    frame_stack: 4
+    life_done: True
+    reward_clip: 1
+    np_obs: False
+    seed: 0
+
+model:
+    encoder:
+        cnn_name: nature
+        out_size: null
+    q:
+        kernel_initializer: glorot_uniform
+        units_list: [512]
+        activation: relu
+        layer_type: dense
+        duel: False
+
+agent:
+    algorithm: &algo dqn
+    replay_type: &replay per
+    gamma: &gamma 0.99
+    batch_size: &bs 32
+    n_steps: &nsteps 3      # n-step target
+    precision: &prec 32
+
+    schedule_act_eps: True
+    act_eps: 0.01
+    eval_act_eps: .001
+
+    MAX_STEPS: 4e6      # maximum training frames
+    TRAIN_PERIOD: 16    # #frames
+    EVAL_PERIOD: 5e5
+    LOG_PERIOD: 1e4
+    N_UPDATES: 1
+    RECORD: False
+
+    # model path: root_dir/model_name/models
+    # tensorboard path: root_dir/model_name/logs
+    # the following names are just examples; they will be reset in our training process
+    root_dir: *algo                         # root path for tensorboard logs
+    model_name: *algo
+
+    loss_type: huber   # huber or mse
+    target_update_period: 2000  # trainning step
+    tbo: False                              # transformed Bellman Operator
+    
+    # arguments for optimizer
+    optimizer: adam
+    schedule_lr: False
+    lr: 5e-5
+    clip_norm: 10
+    opt_eps: 3.125e-4
+
+    # arguments for PER
+    per_alpha: .5
+    per_epsilon: 1e-4
+
+replay:
+    replay_type: *replay
+    precision: 32
+    # arguments for PER
+    beta0: .4
+    beta_steps: 1e5
+    to_update_top_priority: True
+
+    # arguments for general replay
+    n_steps: *nsteps
+    gamma: *gamma
+    batch_size: *bs
+    min_size: 20000
+    capacity: 1e5
+    has_next_obs: True

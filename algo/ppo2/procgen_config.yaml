@@ -1,0 +1,88 @@
+---
+env:
+    name: &env_name procgen_climber
+    n_workers: 1
+    n_envs: &nenvs 64
+    frame_skip: 1
+    frame_stack: 1
+    # num_levels: 200
+
+model:
+    encoder: 
+        cnn_name: impala
+        out_size: 256
+    rnn:
+        units: 256
+        kernel_initializer: orthogonal
+        use_ln: False
+    actor:
+        units_list: []
+        norm: null
+        kernel_initializer: orthogonal
+        activation: relu
+        eval_act_temp: 1
+    value:
+        units_list: []
+        norm: null
+        kernel_initializer: orthogonal
+        activation: relu
+
+agent:
+    algorithm: &algo ppo2
+    precision: 32
+    gamma: &gamma .999
+
+    MAX_STEPS: 2.5e7
+    N_STEPS: &nsteps 256
+    N_EPOCHS: 3
+    N_MBS: &nmbs 8
+    sample_size: &ss 16       # BPTT length
+    LOG_PERIOD: 100
+    EVAL_PERIOD: 100
+    max_kl: 0            # early stop when max_kl is violated. 0 or null suggests unbound
+
+    normalize_obs: False
+    normalize_reward: True
+    store_state: True
+    
+    # additional_rnn_inputs:
+    #     prev_reward: float32
+    #     prev_action: int32
+
+    # (once, reuse, null)
+    # "once" updates values at the end of each epoch
+    # "reuse" updates values using value from learn, which is staler than once
+    # null doesn't update values.
+    value_update: null
+
+    # model path: root_dir/model_name/models
+    # tensorboard path: root_dir/model_name/logs
+    # the following names are just examples; they will be reset in our training process
+    root_dir: *algo                         # root path for tensorboard logs
+    model_name: *algo
+    RECORD: True
+    
+    # arguments for optimizer
+    optimizer: adam
+    schedule_lr: False
+    lr: 5e-4
+    clip_norm: .5
+    opt_eps: 1e-5
+    # arguments for loss
+    value_loss: clip
+    clip_range: .2          # clip range for ppo
+    entropy_coef: .01
+    value_coef: .5
+
+buffer:
+    adv_type: gae     # nae or gae
+    gamma: *gamma
+    lam: .95
+    n_envs: *nenvs
+    N_STEPS: *nsteps
+    N_MBS: *nmbs        # number of minibatches
+    sample_keys: [obs, action, value, traj_ret, advantage, logpi, mask, h, c]
+    # sample_keys: [obs, action, value, traj_ret, advantage, logpi, mask, h, c, prev_action, prev_reward]
+    sample_size: *ss
+    shuffle: True
+    # mini-batch size = n_workers * n_envs * epslen / n_mbs

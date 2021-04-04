@@ -1,0 +1,88 @@
+---
+env:
+    name: dmc_walker_walk
+    n_envs: 8
+    frame_skip: 2
+    seed: 0
+    precision: &prec 16
+model:
+    encoder:
+        has_cnn: True
+    rssm:
+        stoch_size: 30
+        deter_size: 200
+        hidden_size: 200
+        activation: elu
+    reward:
+        units_list: [400, 400]
+        activation: elu
+    actor:
+        units_list: [400, 400, 400, 400]
+        activation: elu
+        init_std: 5
+        min_std: 1e-4
+        mean_scale: 5
+    value:
+        units_list: [400, 400, 400]
+        activation: elu
+    decoder:
+        has_cnn: True
+    # uncomment the following code for atari games
+    # discount:
+    #     units_list: [400, 400, 400]
+    #     activation: elu
+agent:
+    algorithm: &algo seed1-dreamer
+    polyak: .995
+    precision: *prec
+    batch_size: &bs 50
+
+    # R2D2
+    store_state: False
+    burn_in: False
+    sample_size: &ss 50
+    burn_in_size: 40
+
+    # distributed training
+    n_workers: &nw 2
+    action_batch: 4
+
+    MAX_STEPS: 5e6
+    LOG_PERIOD: 1000
+    SYNC_PERIOD: &sync 32
+    N_UPDATES: *sync
+    log_images: True
+
+    # model
+    free_nats: 3.
+    kl_scale: 1.
+    discount_scale: 10.
+    # behavior
+    horizon: 15
+    gamma: &gamma 0.99
+    lambda: .95
+    act_eps: .3
+
+    # model path: root_dir/model_name/models
+    # tensorboard path: root_dir/model_name/logs
+    # the following names are just examples; they will be reset in our training process
+    root_dir: *algo                         # root path for tensorboard logs
+    model_name: *algo
+
+    # arguments for optimizer
+    optimizer: adam
+    clip_norm: 100.
+    weight_decay: 0.
+    model_lr: 6e-4
+    actor_lr: 8e-5
+    value_lr: 8e-5
+
+replay:
+    type: episodic
+
+    # arguments for general replay
+    batch_size: *bs
+    sample_size: *ss
+    max_episodes: 1000
+    min_episodes: *nw
+    save: False

@@ -1,0 +1,71 @@
+---
+env:
+    name: &env_name atari_MontezumaRevenge
+    max_episode_steps: 18000
+    n_workers: 5
+    n_envs: &nenvs 4
+    seed: 0
+    frame_skip: 4
+    frame_stack: 4
+    gray_scale: True
+    np_obs: True
+    reward_clip: 1
+
+model:
+    ac:
+        cnn_name: nature
+        kernel_initializer: orthogonal
+        activation: relu
+        init_std: 1
+
+agent:
+    algorithm: &algo rnd
+    precision: &prec 32
+    gamma_int: &gi .99
+    gamma_ext: &ge .999
+
+    MAX_STEPS: 1e10
+    N_STEPS: &nsteps 128
+    N_UPDATES: 4
+    N_MBS: &nmbs 4
+    LOG_PERIOD: 200
+    EVAL_PERIOD: 500
+    max_kl: 0            # early stop when max_kl is violated. 0 or null suggests unbound
+
+    normalize_obs: False
+    normalize_reward: False
+    # (once, reuse, null)
+    # "once" updates values at the end of each epoch
+    # "reuse" updates values using value from learn, which is staler than once
+    # null doesn't update values.
+    value_update: null
+
+    # model path: root_dir/model_name/models
+    # tensorboard path: root_dir/model_name/logs
+    # the following names are just examples; they will be reset in our training process
+    root_dir: *algo                         # root path for tensorboard logs
+    model_name: *algo
+    
+    # arguments for optimizer
+    optimizer: adam
+    schedule_lr: False
+    ac_lr: 1e-4
+    pred_lr: 1e-4
+    clip_norm: 0
+    # arguments for loss
+    clip_range: .1          # clip range for ppo
+    entropy_coef: .001
+    v_coef: 1
+    pred_frac: .25  # fraction of experiences used for predictor update
+
+buffer:
+    precision: *prec
+    gamma_int: *gi
+    gamma: *ge
+    int_coef: 1
+    ext_coef: 2
+    lam: .95
+    n_envs: *nenvs
+    N_STEPS: *nsteps
+    N_MBS: *nmbs        # number of minibatches
+    # mini-batch size = n_workers * n_envs * epslen / n_mbs

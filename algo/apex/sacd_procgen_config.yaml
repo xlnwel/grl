@@ -1,0 +1,112 @@
+---
+env:
+    name: procgen_starpilot
+    distribution_mode: easy
+    n_envs: &ne 4
+    frame_diff: False
+    frame_skip: 1
+    frame_stack: 4
+    np_obs: True
+    reward_scale: 2
+    reward_clip: 10
+
+model:
+    encoder: 
+        cnn_name: impala
+    actor:
+        units_list: [512]
+        layer_type: dense
+        norm: null
+        kernel_initializer: glorot_uniform
+        activation: relu
+    q:
+        units_list: [512]
+        layer_type: dense
+        norm: null
+        kernel_initializer: glorot_uniform
+        activation: relu
+        duel: False
+    temperature:
+        temp_type: constant
+        value: .01
+    twin_q: False
+    reward_kl: False
+
+agent:
+    algorithm: &algo apex-sacd
+    replay_type: &replay per
+    gamma: &gamma .99
+    batch_size: &bs 64
+    n_steps: &nsteps 3      # n-step target
+    target_entropy_coef: .8
+
+    probabilistic_regularization: entropy
+
+    schedule_act_eps: True
+    act_eps_type: line
+    act_eps: .3
+    eval_act_eps: 0
+    schedule_act_temp: True
+    n_exploit_envs: 8
+    min_temp: .5
+    max_temp: 10
+    
+    MAX_STEPS: 8e6      # maximum env steps
+    LOG_PERIOD: 100
+    N_UPDATES: 1
+    SYNC_PERIOD: 400
+    RECORD_PERIOD: 100
+    N_EVALUATION: 10
+    logger: True
+
+    # distributed algo params
+    n_learner_cpus: 1
+    n_learner_gpus: .3
+    n_workers: 5
+    n_worker_cpus: 1
+    n_worker_gpus: .1
+    run_mode: nsteps
+    worker_side_prioritization: False
+
+    # model path: root_dir/model_name/models
+    # tensorboard path: root_dir/model_name/logs
+    # the following names are just examples; they will be reset in our training process
+    root_dir: *algo                         # root path for tensorboard logs
+    model_name: *algo
+
+    target_update_period: 1500
+
+    # arguments for optimizer
+    optimizer: adam
+    schedule_lr: False
+    value_lr: 2.5e-4
+    actor_lr: 2.5e-4
+    temp_lr: 2.5e-4
+    weight_decay: null
+    clip_norm: 0
+    opt_eps: 1e-7
+    prior_lr: 1.e-3
+    
+    # arguments for PER
+    per_alpha: .6
+    per_epsilon: 1e-4
+    use_is_ratio: &is False
+
+replay:
+    replay_type: *replay
+    seqlen: 50
+    n_envs: *ne
+    # arguments for PER
+    beta0: .4
+    beta_steps: 2e6
+    to_update_top_priority: True
+    use_is_ratio: *is
+
+    # arguments for general replay
+    n_steps: *nsteps
+    max_steps: 3
+    gamma: *gamma
+    batch_size: *bs
+    min_size: 1600
+    capacity: 2.5e5
+    has_next_obs: True

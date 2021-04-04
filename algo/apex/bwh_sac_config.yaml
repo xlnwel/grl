@@ -1,0 +1,81 @@
+---
+env:
+    name: BipedalWalkerHardcore-v3
+    n_envs: 1
+    seed: 0
+    reward_clip: 10
+model:
+    actor:
+        units_list: [512, 256, 128]
+        norm: null
+        activation: relu
+        LOG_STD_MIN: -20
+        LOG_STD_MAX: 2
+    q:
+        units_list: [512, 512, 256]
+        norm: null
+        activation: relu
+    temperature:
+        temp_type: constant
+        value: .01
+
+agent:
+    algorithm: &algo apex-sac
+    replay_type: &replay per
+    gamma: &gamma 0.99
+    n_steps: &nsteps 3      # n-step target
+    polyak: .995
+    precision: &prec 32
+    evaluation: False
+    act_eps: 0
+    
+    MAX_STEPS: 1e8
+    LOG_PERIOD: &log 1000
+    N_UPDATES: *log
+    SYNC_PERIOD: 1000
+    RECORD_PERIOD: 100
+    N_EVALUATION: 10
+
+    # distributed algo params
+    n_learner_cpus: 1
+    n_learner_gpus: 1
+    n_workers: 5
+    n_worker_cpus: 1
+    n_worker_gpus: 0
+
+    # model path: root_dir/model_name/models
+    # tensorboard path: root_dir/model_name/logs
+    # the following names are just examples; they will be reset in our training process
+    root_dir: *algo                         # root path for tensorboard logs
+    model_name: *algo
+
+    loss_type: mse                          # huber or mse
+
+    # arguments for optimizer
+    optimizer: adam
+    schedule_lr: False
+    actor_lr: 1e-4
+    value_lr: 1e-4
+    temp_lr: 1e-4
+    # clip_norm: 10
+
+    # arguments for PER
+    per_alpha: 0.7
+    per_epsilon: 1e-4
+
+replay:
+    replay_type: *replay
+    seqlen: 100
+    # arguments for PER
+    beta0: 0.4
+    beta_steps: 5e4
+    to_update_top_priority: False
+
+    # arguments for general replay
+    n_steps: *nsteps
+    gamma: *gamma
+    batch_size: 512
+    min_size: 5e4
+    capacity: 1e6
+    has_next_obs: False                 # should be true if workers send incomplete trajs
+

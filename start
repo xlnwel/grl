@@ -1,0 +1,63 @@
+#!/bin/zsh
+
+
+algos=(
+    # ppo
+    # ppo_meta
+    # ppg
+    # apex-dqn
+    # apex-iqn
+    # apex-mrdqn
+    daac
+    # apex-mrdqn
+    # sacdiqn5
+)
+suite=procgen
+envs=(
+    # ninja
+    chaser
+    bigfish
+    plunder
+    coinrun
+    heist
+    starpilot
+    miner
+    climber
+    dodgeball
+    bigfish
+    caveflyer 
+    leaper
+    jumper
+    fruitbot
+    bossfight
+    maze
+)
+args1=(entropy)
+args2=(1)
+args3=(1)
+
+for e in "${envs[@]}"; do
+    for a in "${algos[@]}"; do
+        for a1 in "${args1[@]}"; do
+            for a2 in "${args2[@]}"; do
+                for a3 in "${args3[@]}"; do
+                    # if [[ $a2 == $a3 ]]
+                    # then continue
+                    # fi
+                    # sed -e "s/KI/${a2}/g" \
+                    #     algo/ppo/${suite}_template.yaml > algo/ppo/${suite}_config.yaml
+                    dir="logs/${suite}_${e}/${a}"
+                    mkdir -p $dir
+                    # py_script="train ${a} -e ${suite}_${e} $@ >& ${dir}/outputs.txt"
+                    py_script="train ${a} -e ${suite}_${e} >& ${dir}/outputs.txt"
+                    echo $py_script
+                    eval $py_script
+                    last_dir=$(ls -td ${dir}/* | grep -v txt | head -n 1)
+                    mv_script="mv ${dir}/outputs.txt ${last_dir}/outputs.txt"
+                    echo $mv_script
+                    eval $mv_script
+                done
+            done
+        done
+    done
+done

@@ -1,0 +1,76 @@
+---
+env:
+    name: LunarLander-v2
+    # reward_clip: 10
+
+model:
+    encoder: 
+        units_list: []
+    actor:
+        units_list: [128, 64]
+        norm: null
+        activation: relu
+    q:
+        units_list: [128, 64]
+        norm: null
+        activation: relu
+    temperature:
+        temp_type: variable
+        value: .01
+
+agent:
+    algorithm: &algo sacd
+    replay_type: &replay per
+    gamma: &gamma .99
+    batch_size: &bs 256
+    n_steps: &nsteps 3
+    polyak: .995
+
+    schedule_act_eps: False
+    act_eps: 0
+    target_entropy_coef: .5
+    
+    MAX_STEPS: 3e6
+    TRAIN_PERIOD: 1
+    LOG_PERIOD: 5000
+    EVAL_PERIOD: 5000
+    N_UPDATES: 1
+    N_EVAL_EPISODES: 1
+    RECORD: True
+    
+    soft_target: True
+    tbo: False
+
+    # model path: root_dir/model_name/models
+    # tensorboard path: root_dir/model_name/logs
+    # the following names are just examples; they will be reset in our training process
+    root_dir: *algo                         # root path for tensorboard logs
+    model_name: *algo
+
+    # arguments for optimizer
+    optimizer: adam
+    schedule_lr: False
+    actor_lr: 1e-4
+    value_lr: 1e-4
+    temp_lr: 1e-4
+    # clip_norm: 10
+    
+    # arguments for PER
+    per_alpha: .5
+    per_epsilon: 1e-4
+
+replay:
+    replay_type: *replay
+    seqlen: 50
+    # arguments for PER
+    beta0: .4
+    beta_steps: 5e4
+    to_update_top_priority: True
+
+    # arguments for general replay
+    n_steps: *nsteps
+    gamma: *gamma
+    batch_size: *bs
+    min_size: 1e4
+    capacity: 1e6
+    has_next_obs: False
