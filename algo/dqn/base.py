@@ -1,4 +1,5 @@
 import logging
+import numpy as np
 import tensorflow as tf
 
 from utility.tf_utils import log_softmax
@@ -31,13 +32,21 @@ def get_data_format(*, env, replay_config, **kwargs):
 
     return data_format
 
-def collect(replay, env, env_step, reset, **kwargs):
+def collect(replay, env, env_step, reset, next_obs, **kwargs):
     # if reset:
     #     # we reset noisy every episode. Theoretically, 
     #     # this follows the guide of deep exploration.
     #     # More importantly, it saves time!
     #     if hasattr(agent, 'reset_noisy'):
     #         agent.reset_noisy()
+    if isinstance(reset, np.ndarray):
+        if np.any(reset):
+            for i, r in enumerate(reset):
+                if r:
+                    next_obs[i] = env.prev_obs(i)[0]
+    elif reset:
+        next_obs = env.prev_obs()
+    kwargs['next_obs'] = next_obs
     replay.add(**kwargs)
 
 
@@ -47,7 +56,9 @@ class DQNBase(TargetNetOps, AgentBase, ActionScheduler):
     def _add_attributes(self, env, dataset):
         super()._add_attributes(env, dataset)
 
-        self.MUNCHAUSEN = False
+        self.MUNCHAUSEN = getattr(self, 'MUNCHAUSEN', False)
+        self._probabilistic_regularization = getattr(
+            self,  '_probabilistic_regularization', None)
 
         self._is_per = False if dataset is None else dataset.name().endswith('per')
         self._double = getattr(self, '_double', False)

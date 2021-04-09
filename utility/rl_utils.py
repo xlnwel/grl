@@ -87,6 +87,7 @@ def compute_act_eps(act_eps_type, act_eps, worker_id, n_workers, envs_per_worker
 def compute_act_temp(min_temp, max_temp, n_exploit_envs, worker_id, n_workers, envs_per_worker):
     n_envs = n_workers * envs_per_worker
     if n_exploit_envs:
+        assert n_exploit_envs < n_envs, f'{n_exploit_envs} >= {n_envs}'
         act_temps = np.concatenate(
             [np.linspace(min_temp, 1, n_exploit_envs), 
             np.logspace(0, np.log10(max_temp), 

@@ -11,7 +11,7 @@ class Discriminator(Module):
         config = config.copy()
 
         self._obs_action = config.pop('obs_action', True)
-        self._g = mlp(**config, out_size=1, name='g')
+        self._g = mlp(**config, out_size=1, name='g')   # the AIRL paper use a linear model here, we use the same model for g and h for simplicity
         self._h = mlp(**config, out_size=1, name='h')
     
     def call(self, obs, action, discount, logpi, next_obs):

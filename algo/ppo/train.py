@@ -1,3 +1,5 @@
+import functools
+
 from core.tf_config import configure_gpu, configure_precision, silence_tf_logs
 from utility.utils import Every, TempStore
 from utility.graph import video_summary
@@ -10,6 +12,8 @@ from env.func import create_env
 def train(agent, env, eval_env, buffer):
     def collect(env, step, reset, next_obs, **kwargs):
         buffer.add(**kwargs)
+    collect_fn = pkg.import_module('agent', algo=agent.name).collect
+    collect = functools.partial(collect_fn, buffer)
 
     step = agent.env_step
     runner = Runner(env, agent, step=step, nsteps=agent.N_STEPS)

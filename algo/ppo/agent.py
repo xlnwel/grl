@@ -2,7 +2,7 @@ import tensorflow as tf
 
 from core.tf_config import build
 from core.decorator import override
-from algo.ppo.base import PPOBase
+from algo.ppo.base import PPOBase, collect
 
 
 class Agent(PPOBase):

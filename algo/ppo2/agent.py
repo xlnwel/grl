@@ -4,7 +4,7 @@ from core.tf_config import build
 from core.decorator import override
 from core.base import Memory
 from env.wrappers import EnvOutput
-from algo.ppo.base import PPOBase
+from algo.ppo.base import PPOBase, collect
 
 
 class Agent(Memory, PPOBase):

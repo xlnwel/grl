@@ -19,6 +19,9 @@ def train(agent, env, eval_env, replay):
     runner = Runner(env, agent, step=env_step, nsteps=agent.TRAIN_PERIOD)
     while not replay.good_to_learn():
         env_step = runner.run(
+            # NOTE: random action below makes a huge difference for Mujoco tasks
+            # by default, we don't use it as it's not a conventional practice. 
+            # action_selector=env.random_action,
             step_fn=collect)
 
     to_eval = Every(agent.EVAL_PERIOD)

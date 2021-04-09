@@ -1,9 +1,9 @@
 ## Algorithms implemented in each folder
 
-- airl
+- airl: AIRL
 - apex: Ape-X for distributed training
 - daac: Decoupled advantage actor-critic
-- dqn: raibow(except c51)
+- dqn: Raibow(except c51)
 - dreamer: Dreamer for DMC
 - fqf: FQF
 - gail: GAIL
@@ -19,4 +19,4 @@
 - sacdiqn: SAC + IQN for discrete action space and CNN
 - seed: SEED for distributed training
 
-**Note:** Do not run value-based algorithms on the 'procgen' suite. Run the Ape-X version instead! 
+**Note:** Do not run value-based algorithms on the 'procgen' suite. Instead, run the Ape-X version and fill in the corresponding *config.yaml as you need.

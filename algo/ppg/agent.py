@@ -9,7 +9,7 @@ from utility.rl_loss import ppo_loss
 from core.tf_config import build
 from core.optimizer import Optimizer
 from core.decorator import override
-from algo.ppo.base import PPOBase
+from algo.ppo.base import PPOBase, collect
 
 
 logger = logging.getLogger(__name__)

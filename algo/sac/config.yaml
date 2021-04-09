@@ -30,10 +30,10 @@ agent:
     eval_act_eps: 0
 
     MAX_STEPS: 3e6
-    TRAIN_PERIOD: 50
+    TRAIN_PERIOD: 1
     LOG_PERIOD: 5000
     EVAL_PERIOD: 5000
-    N_UPDATES: 50
+    N_UPDATES: 1
     N_EVAL_EPISODES: 1
     # RECORD: True
 

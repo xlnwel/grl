@@ -15,12 +15,12 @@ model:
         init_std: 1
         norm: null
         kernel_initializer: orthogonal
-        activation: relu
+        activation: tanh
     value:
         units_list: [64, 64]
         norm: null
         kernel_initializer: glorot_uniform
-        activation: relu
+        activation: tanh
 
 agent:
     algorithm: &algo ppo

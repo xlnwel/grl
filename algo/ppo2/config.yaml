@@ -9,7 +9,7 @@ model:
     encoder: 
         units_list: [64]
         kernel_initializer: glorot_uniform
-        activation: relu
+        activation: tanh
     rnn:
         units: 64
         use_ln: False
@@ -18,12 +18,12 @@ model:
         init_std: 1
         norm: null
         kernel_initializer: orthogonal
-        activation: relu
+        activation: tanh
     value:
         units_list: []
         norm: null
         kernel_initializer: orthogonal
-        activation: relu
+        activation: tanh
     additional_rnn_input: False
 
 agent:

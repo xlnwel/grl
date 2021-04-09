@@ -63,7 +63,7 @@ agent:
     # distributed algo params
     n_learner_cpus: 1
     n_learner_gpus: .3
-    n_workers: 5
+    n_workers: 4
     n_worker_cpus: 1
     n_worker_gpus: .1
     run_mode: nsteps
@@ -81,6 +81,8 @@ agent:
     tbo: False
     
     loo_c: 1.
+    v_pi_coef: 1.
+    reinforce_coef: 1.
     tau: *tau
     # arguments for optimizer
     optimizer: adam

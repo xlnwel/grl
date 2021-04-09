@@ -11,6 +11,9 @@ from core.decorator import override, step_track
 
 logger = logging.getLogger(__name__)
 
+def collect(buffer, env, step, reset, next_obs, **kwargs):
+    buffer.add(**kwargs)
+    
 class PPOBase(RMSAgentBase):
     """ Initialization """
     @override(RMSAgentBase)

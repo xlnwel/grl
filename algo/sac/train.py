@@ -82,34 +82,34 @@ from algo.dqn.train import *
 #     # train(agent, env, eval_env, replay)
 
 #     # This training process is used for Mujoco tasks, following the same process as OpenAI's spinningup
-#     # out = env.reset()
-#     # obs, _, _, _ = out
-#     # epslen = 0
-#     # from utility.utils import Every
-#     # to_log = Every(agent.LOG_PERIOD)
-#     # for t in range(int(agent.MAX_STEPS)):
-#     #     if t > 1e4:
-#     #         action = agent(out)
-#     #     else:
-#     #         action = env.random_action()
+#     out = env.reset()
+#     obs, _, _, _ = out
+#     epslen = 0
+#     from utility.utils import Every
+#     to_log = Every(agent.LOG_PERIOD)
+#     for t in range(int(agent.MAX_STEPS)):
+#         if t > 1e4:
+#             action = agent(out)
+#         else:
+#             action = env.random_action()
 
-#     #     out = env.step(action)
-#     #     next_obs, reward, discount, reset = out
-#     #     epslen += 1
-#     #     replay.add(obs=obs, action=action, reward=reward, discount=discount, next_obs=next_obs)
-#     #     obs = next_obs
+#         out = env.step(action)
+#         next_obs, reward, discount, reset = out
+#         epslen += 1
+#         replay.add(obs=obs, action=action, reward=reward, discount=discount, next_obs=next_obs)
+#         obs = next_obs
 
-#     #     if not discount or epslen == env.max_episode_steps:
-#     #         agent.store(score=env.score(), epslen=env.epslen())
-#     #         assert epslen == env.epslen(), f'{epslen} vs {env.epslen()}'
-#     #         obs, _, _, _ = env.reset()
-#     #         epslen = 0
+#         if not discount or epslen == env.max_episode_steps:
+#             agent.store(score=env.score(), epslen=env.epslen())
+#             assert epslen == env.epslen(), f'{epslen} vs {env.epslen()}'
+#             obs, _, _, _ = env.reset()
+#             epslen = 0
 
-#     #     if replay.good_to_learn() and t % agent.TRAIN_PERIOD == 0:
-#     #         agent.learn_log(t)
-#     #     if to_log(t):
-#     #         eval_score, eval_epslen, _ = evaluate(eval_env, agent)
+#         if replay.good_to_learn() and t % agent.TRAIN_PERIOD == 0:
+#             agent.learn_log(t)
+#         if to_log(t):
+#             eval_score, eval_epslen, _ = evaluate(eval_env, agent)
 
-#     #         agent.store(eval_score=eval_score, eval_epslen=eval_epslen)
-#     #         agent.log(step=t)
-#     #         agent.save()
+#             agent.store(eval_score=eval_score, eval_epslen=eval_epslen)
+#             agent.log(step=t)
+#             agent.save()
