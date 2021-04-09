@@ -212,3 +212,21 @@ class EnvVecSequentialBuffer(SequentialBuffer):
         assert len(results) == self._n_envs, results
         
         return results
+
+class EpisodicBuffer(LocalBuffer):
+    def _add_attributes(self):
+        self.reset()
+    
+    def reset(self):
+        self._memory = collections.defaultdict(list)
+
+    def sample(self):
+        results = {}
+        for k, v in self._memory.items():
+            results[k] = np.array(v)
+        self.reset()
+        return results
+
+    def add(self, **data):
+        for k, v in data.items():
+            self._memory[k].append(v)

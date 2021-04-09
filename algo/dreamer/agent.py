@@ -3,18 +3,17 @@ import numpy as np
 import tensorflow as tf
 from tensorflow_probability import distributions as tfd
 
-from utility.display import pwc
 from utility.utils import AttrDict, Every
-from utility.rl_utils import lambda_return
+from utility.rl_loss import lambda_return
 from utility.tf_utils import static_scan
 from core.tf_config import build
-from core.base import AgentBase
-from core.decorator import agent_config, step_track
+from core.base import AgentBase, Memory
+from core.decorator import override, step_track
 from core.optimizer import Optimizer
 from algo.dreamer.nn import RSSMState
 
 
-def get_data_format(env, batch_size, sample_size=None, 
+def get_data_format(*, env, batch_size, sample_size=None, 
         store_state=False, state_size=None, dtype=tf.float32, **kwargs):
     data_format = dict(
         obs=((batch_size, sample_size, *env.obs_shape), env.obs_dtype),
@@ -28,14 +27,42 @@ def get_data_format(env, batch_size, sample_size=None,
                 for k, v in state_size._asdict().items()
         })
     return data_format
-    
-class Agent(AgentBase):
-    @agent_config
-    def __init__(self, *, dataset, env):
-        # dataset for input pipline optimization
-        self.dataset = dataset
 
-        # optimizer
+
+def collect(replay, env, env_step, reset, obs, 
+            prev_action, reward, discount, next_obs, **kwargs):
+    # print('obs', obs.shape, obs.dtype)
+    # print('action', prev_action.shape)
+    # print('reward', reward)
+    # print('discount', discount)
+    if isinstance(reset, np.ndarray):
+        for i, r in enumerate(reset):
+            replay.add(i, r, obs=obs[i], prev_action=prev_action[i],
+                reward=reward[i], discount=discount[i])
+            if r:
+                zero_action = np.zeros_like(prev_action[i], dtype=prev_action[0].dtype) \
+                    if isinstance(prev_action[0], np.ndarray) else np.float32(0)
+                replay.add(i, False, obs=env.prev_obs(i)[0], prev_action=zero_action,
+                    reward=np.float32(0), discount=np.float32(1))
+    else:
+        replay.add(0, reset, obs=obs, prev_action=prev_action,
+            reward=reward, discount=discount)
+        if reset:
+            zero_action = np.zeros_like(prev_action, dtype=prev_action.dtype) \
+                if isinstance(prev_action, np.ndarray) else np.float32(0)
+            replay.add(0, False, obs=env.prev_obs()[0], prev_action=zero_action,
+                reward=np.float32(0), discount=np.float32(1))
+
+
+class Agent(Memory, AgentBase):
+    @override(AgentBase)
+    def _add_attributes(self, env, dataset):
+        super()._add_attributes(env, dataset)
+        self._to_log_images = Every(self.LOG_PERIOD)
+        self._setup_memory_state_record()
+
+    @override(AgentBase)
+    def _construct_optimizers(self):
         dynamics_models = [self.encoder, self.rssm, self.decoder, self.reward]
         if hasattr(self, 'discount'):
             dynamics_models.append(self.discount)
@@ -53,12 +80,8 @@ class Agent(AgentBase):
         self._state = None
         self._prev_action = None
 
-        self._obs_shape = env.obs_shape
-        self._action_dim = env.action_dim
-        self._is_action_discrete = env.is_action_discrete
-
-        self._to_log_images = Every(self.LOG_PERIOD)
-
+    @override(AgentBase)
+    def _build_learn(self, env):
         # time dimension must be explicitly specified here
         # otherwise, InaccessibleTensorError arises when expanding rssm
         TensorSpecs = dict(
@@ -77,65 +100,18 @@ class Agent(AgentBase):
 
         self.learn = build(self._learn, TensorSpecs, batch_size=self._batch_size)
 
-    def reset_states(self, state=(None, None)):
-        self._state, self._prev_action = state
+    def _process_input(self, obs, evaluation, env_output):
+        obs, kwargs = super()._process_input(obs, evaluation, env_output)
+        obs, kwargs = self._add_memory_state_to_kwargs(obs, env_output, kwargs)
+        return obs, kwargs
 
-    def get_states(self):
-        return self._state, self._prev_action
-
-    def __call__(self, obs, reset=np.zeros(1), evaluation=False, **kwargs):
-        if len(obs.shape) % 2 != 0:
-            has_expanded = True
-            obs = np.expand_dims(obs, 0)
-        else:
-            has_expanded = False
-        if self._state is None and self._prev_action is None:
-            self._state = self.rssm.get_initial_state(batch_size=tf.shape(obs)[0])
-            self._prev_action = tf.zeros(
-                (tf.shape(obs)[0], self._action_dim), self._dtype)
-        if np.any(reset):
-            mask = tf.cast(1. - reset, self._dtype)[:, None]
-            self._state = tf.nest.map_structure(lambda x: x * mask, self._state)
-            self._prev_action = self._prev_action * mask
-        prev_state = self._state
-        action, self._state = self.action(
-            obs, self._state, self._prev_action, evaluation)
+    def _process_output(self, obs, kwargs, out, evaluation):
+        out = self._add_tensor_memory_state_to_terms(obs, kwargs, out, evaluation)
+        if not evaluation:
+            out[1]['prev_action'] = self._additional_rnn_inputs['prev_action']
+        out = super()._process_output(obs, kwargs, out, evaluation)
         
-        self._prev_action = tf.one_hot(action, self._action_dim, dtype=self._dtype) \
-            if self._is_action_discrete else action
-        
-        action = np.squeeze(action.numpy()) if has_expanded else action.numpy()
-        if self._store_state:
-            return action, tf.nest.map_structure(lambda x: x.numpy(), prev_state._asdict())
-        else:
-            return action
-        
-    @tf.function
-    def action(self, obs, state, prev_action, evaluation=False):
-        if obs.dtype == np.uint8:
-            obs = tf.cast(obs, self._dtype) / 255. - .5
-
-        obs = tf.expand_dims(obs, 1)
-        embed = self.encoder(obs)
-        embed = tf.squeeze(embed, 1)
-        state = self.rssm.post_step(state, prev_action, embed)
-        feature = self.rssm.get_feat(state)
-        if evaluation:
-            action = self.actor(feature)[0].mode()
-        else:
-            if self._is_action_discrete:
-                act_dist = self.actor(feature)[0]
-                action = act_dist.sample(one_hot=False)
-                rand_act = tfd.Categorical(tf.zeros_like(act_dist.logits)).sample()
-                action = tf.where(
-                    tf.random.uniform(action.shape, 0, 1) < self._act_eps,
-                    rand_act, action)
-            else:
-                action = self.actor(feature)[0].sample()
-                action = tf.clip_by_value(
-                    tfd.Normal(action, self._act_eps).sample(), -1, 1)
-            
-        return action, state
+        return out
 
     @step_track
     def learn_log(self, step):

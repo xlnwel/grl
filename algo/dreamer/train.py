@@ -1,10 +1,7 @@
-import os
 import time
 import functools
 import numpy as np
-import tensorflow as tf
 from tensorflow.keras.mixed_precision import global_policy
-import ray
 
 from core.tf_config import configure_gpu, configure_precision, silence_tf_logs
 from utility.ray_setup import sigint_shutdown_ray
@@ -19,20 +16,22 @@ from algo.dreamer.env import make_env
 
 
 def train(agent, env, eval_env, replay):
-    def collect(env, step, reset, **kwargs):
-        if np.any(reset):
-            if env.n_envs == 1:
-                episodes = env.prev_episode()
-            else:
-                episodes = [e.prev_episode() for e, d in zip(env.envs, reset) if d]
-            replay.merge(episodes)
+    collect_fn = pkg.import_module('agent', algo=agent.name).collect
+    collect = functools.partial(collect_fn, replay)
+
     _, step = replay.count_episodes()
     step = max(agent.env_step, step)
 
     runner = Runner(env, agent, step=step)
+    def random_actor(*args, **kwargs):
+        prev_action = random_actor.prev_action
+        random_actor.prev_action = action = env.random_action()
+        return action, {'prev_action': prev_action}
+    random_actor.prev_action = np.zeros_like(env.random_action()) \
+        if isinstance(env.random_action(), np.ndarray) else 0
     while not replay.good_to_learn():
-        step = runner.run(action_selector=env.random_action, step_fn=collect)
-        
+        step = runner.run(action_selector=random_actor, step_fn=collect)
+
     to_log = Every(agent.LOG_PERIOD)
     to_eval = Every(agent.EVAL_PERIOD)
     print('Training starts...')
@@ -65,6 +64,7 @@ def main(env_config, model_config, agent_config, replay_config):
 
     use_ray = env_config.get('n_workers', 0) > 1
     if use_ray:
+        import ray
         ray.init()
         sigint_shutdown_ray()
 
@@ -72,9 +72,6 @@ def main(env_config, model_config, agent_config, replay_config):
     eval_env_config = env_config.copy()
     eval_env_config['n_envs'] = 1
     eval_env_config['n_workers'] = 1
-    eval_env_config['log_episode'] = False
-    if 'reward_hack' in eval_env_config:
-        del eval_env_config['reward_hack']
     eval_env = create_env(eval_env_config, make_env)
 
     replay_config['dir'] = agent_config['root_dir'].replace('logs', 'data')
@@ -97,7 +94,6 @@ def main(env_config, model_config, agent_config, replay_config):
     models = create_model(model_config, env)
 
     agent = Agent(
-        name=env.name,
         config=agent_config,
         models=models, 
         dataset=dataset,

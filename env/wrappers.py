@@ -29,8 +29,7 @@ def post_wrap(env, config):
     env = EnvStats(
         env, config.get('max_episode_steps', None), 
         timeout_done=config.get('timeout_done', False),
-        auto_reset=config.get('auto_reset', True),
-        log_episode=config.get('log_episode', False))
+        auto_reset=config.get('auto_reset', True))
     return env
 
 
@@ -327,8 +326,13 @@ class DataProcess(gym.Wrapper):
     def __init__(self, env, precision=32):
         super().__init__(env)
         self.precision = precision
+        self.float_dtype = np.float32 if precision == 32 else np.float16
 
-        self.is_action_discrete = isinstance(self.env.action_space, gym.spaces.Discrete)
+        self.is_action_discrete = isinstance(self.action_space, gym.spaces.Discrete)
+        if not self.is_action_discrete and precision == 16:
+            self.action_space = gym.spaces.Box(
+                self.action_space.low, self.action_space.high, 
+                self.action_space.shape, self.float_dtype)
         self.obs_shape = self.observation_space.shape
         self.action_shape = self.action_space.shape
         self.action_dim = self.action_space.n if self.is_action_discrete else self.action_shape[0]
@@ -367,14 +371,13 @@ Distinctions several signals:
 class EnvStats(gym.Wrapper):
     manual_reset_warning = True
     def __init__(self, env, max_episode_steps=None, timeout_done=False, 
-        auto_reset=True, log_episode=False, initial_state={}):
+            auto_reset=True, initial_state={}):
         """ Records environment statistics """
         super().__init__(env)
         self.max_episode_steps = max_episode_steps or int(1e9)
         # if we take timeout as done
         self.timeout_done = timeout_done
         self.auto_reset = auto_reset
-        self.log_episode = log_episode
         # game_over indicates whether an episode is finished, 
         # either due to timeout or due to environment done
         self._game_over = True
@@ -411,15 +414,6 @@ class EnvStats(gym.Wrapper):
         reset = self.float_dtype(True)
         self._output = EnvOutput(obs, reward, discount, reset)
 
-        if self.log_episode:
-            transition = dict(
-                obs=obs,
-                prev_action=np.zeros(self.action_shape, self.action_dtype),
-                reward=reward,
-                discount=discount, 
-                **self._init_state
-            )
-            self._episode = [transition]
         return self._output
 
     def step(self, action, **kwargs):
@@ -447,21 +441,6 @@ class EnvStats(gym.Wrapper):
         # we expect auto-reset environments, which artificially reset due to life loss,
         # return reset in info when resetting
         reset = self.float_dtype(info.get('reset', False))
-        
-        # log transition
-        if self.log_episode:
-            transition = dict(
-                obs=obs,
-                prev_action=action,
-                reward=reward,
-                discount=discount,
-                **kwargs
-            )
-            self._episode.append(transition)
-            if self._game_over:
-                episode = {k: np.array([t[k] for t in self._episode])
-                    for k in self._episode[0]}
-                self._prev_episode = episode
 
         # reset env
         if self._game_over:

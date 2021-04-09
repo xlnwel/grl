@@ -362,12 +362,15 @@ class Memory:
             self._state = self.model.get_initial_state(batch_size=B)
             for k, v in self._additional_rnn_inputs.items():
                 assert v in ('float32', 'int32', 'float16'), v
-                self._additional_rnn_inputs[k] = tf.zeros(B, dtype=v)
+                if k == 'prev_action':
+                    self._additional_rnn_inputs[k] = tf.zeros((B, *self._action_shape), dtype=v)
+                else:
+                    self._additional_rnn_inputs[k] = tf.zeros(B, dtype=v)
             self._squeeze_batch = B == 1
 
         if 'prev_reward' in self._additional_rnn_inputs:
             self._additional_rnn_inputs['prev_reward'] = tf.convert_to_tensor(
-                env_output.reward, tf.float32)
+                env_output.reward, self._additional_rnn_inputs['prev_reward'].dtype)
 
         kwargs.update({
             'state': state or self._state,
@@ -378,9 +381,6 @@ class Memory:
     
     def _add_tensor_memory_state_to_terms(self, obs, kwargs, out, evaluation):
         out, self._state = out
-        if 'prev_action' in self._additional_rnn_inputs:
-            self._additional_rnn_inputs['prev_action'] = \
-                out[0] if isinstance(out, tuple) else out
         
         if not evaluation:
             if self._store_state:
@@ -390,11 +390,14 @@ class Memory:
             if 'prev_reward' in self._additional_rnn_inputs:
                 out[1]['prev_reward'] = self._additional_rnn_inputs['prev_reward']
             if self._squeeze_batch:
-                for k, v in out[1]:
-                    if isinstance(v, tf.Tensor):
-                        v = v.numpy()
+                for k, v in out[1].items():
                     if len(out[1][k].shape) > 0 and out[1][k].shape[0] == 1:
-                        out[1][k] = np.squeeze(v, 0)
+                        out[1][k] = tf.squeeze(v, 0)
+        
+        if 'prev_action' in self._additional_rnn_inputs:
+            self._additional_rnn_inputs['prev_action'] = \
+                out[0] if isinstance(out, tuple) else out
+
         return out
     
     def _add_non_tensor_memory_states_to_terms(self, out, kwargs, evaluation):
@@ -485,9 +488,9 @@ class TargetNetOps:
         logger.info(f"Sync Networks | Target networks: {[n.name for n in tns]}")
         ovars = list(itertools.chain(*[v.variables for v in ons]))
         tvars = list(itertools.chain(*[v.variables for v in tns]))
-        logger.info(f"Sync Networks | Online network parameters:\n" 
+        logger.info(f"Sync Networks | Online network parameters:\n\t" 
             + '\n\t'.join([f'{n.name}, {n.shape}' for n in ovars]))
-        logger.info(f"Sync Networks | Target network parameters:\n" 
+        logger.info(f"Sync Networks | Target network parameters:\n\t" 
             + '\n\t'.join([f'{n.name}, {n.shape}' for n in tvars]))
         assert len(tvars) == len(ovars), f'{tvars}\n{ovars}'
         [tvar.assign(ovar) for tvar, ovar in zip(tvars, ovars)]

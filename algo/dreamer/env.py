@@ -4,7 +4,7 @@ import gym
 import threading
 
 from env import wrappers
-from env import procgen
+from env import pg
 from env.func import create_env
 
 
@@ -26,7 +26,7 @@ def make_env(config):
             life_done=True, sticky_actions=True)
         config['max_episode_steps'] = 108000
     elif 'procgen' in config['name'].lower():
-        env = procgen.make_procgen_env(config)
+        env = pg.make_procgen_env(config)
         config['max_episode_steps'] = env.spec.max_episode_steps or 1000
     else:
         raise NotImplementedError(suite)

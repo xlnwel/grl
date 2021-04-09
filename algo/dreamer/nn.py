@@ -5,8 +5,7 @@ from tensorflow_probability import distributions as tfd
 from tensorflow.keras import layers
 from tensorflow.keras.mixed_precision import global_policy
 
-from core.tf_config import build
-from core.module import Module
+from core.module import Module, Ensemble
 from core.decorator import config
 from utility.tf_utils import static_scan
 from utility.tf_distributions import Categorical, OneHotDist, TanhBijector, SampleDist
@@ -163,9 +162,11 @@ class Actor(Module):
 
         """ Network definition """
         out_size = action_dim if is_action_discrete else 2*action_dim
-        self._layers = mlp(self._units_list, 
-                            out_size=out_size,
-                            activation=self._activation)
+        self._layers = mlp(
+            self._units_list, 
+            out_size=out_size,
+            activation=self._activation,
+            name=name)
 
         self._is_action_discrete = is_action_discrete
 
@@ -200,7 +201,10 @@ class Encoder(Module):
         if getattr(self, '_has_cnn', True):
             self._layers = ConvEncoder(time_distributed=True)
         else:
-            self._layers = mlp(self._units_list, activation=self._activation)
+            self._layers = mlp(
+                self._units_list, 
+                activation=self._activation,
+                name=name)
     
     def call(self, x):
         x = self._layers(x)
@@ -217,9 +221,11 @@ class Decoder(Module):
         if getattr(self, '_has_cnn', None):
             self._layers = ConvDecoder(time_distributed=True)
         else:
-            self._layers = mlp(self._units_list,
-                            out_size=out_size,
-                            activation=self._activation)
+            self._layers = mlp(
+                self._units_list,
+                out_size=out_size,
+                activation=self._activation,
+                name=name)
     
     def call(self, x):
         x = self._layers(x)
@@ -239,11 +245,7 @@ class ConvEncoder(Module):
     def __init__(self, *, time_distributed=False, name='dreamer_cnn', **kwargs):
         """ Hardcode CNN: Assume image of shape (64 ⨉ 64 ⨉ 3) by default """
         super().__init__(name=name)
-        conv2d = lambda *args, **kwargs: (
-            layers.TimeDistributed(layers.Conv2D(*args, **kwargs))
-            if time_distributed else
-            layers.Conv2D(*args, **kwargs)
-        )
+        conv2d = layers.Conv2D
         depth = 32
         kwargs = dict(kernel_size=4, strides=2, activation='relu')
         self._conv1 = conv2d(1 * depth, **kwargs)
@@ -253,13 +255,13 @@ class ConvEncoder(Module):
 
     def call(self, x):
         x = convert_obs(x, [-.5, .5], global_policy().compute_dtype)
-        assert x.shape[-3:] == (64, 64, 3), x.shape
+        B, T = x.shape[:2] if len(x.shape) == 5 else (x.shape[0], 1)
+        x = tf.reshape(x, (-1, *x.shape[-3:]))
         x = self._conv1(x)
         x = self._conv2(x)
         x = self._conv3(x)
         x = self._conv4(x)
-        shape = tf.concat([tf.shape(x)[:-3], [tf.reduce_prod(tf.shape(x)[-3:])]], 0)
-        x = tf.reshape(x, shape)
+        x = tf.reshape(x, (B, T, tf.reduce_prod(tf.shape(x)[-3:])))
 
         return x
 
@@ -269,11 +271,8 @@ class ConvDecoder(Module):
         """ Hardcode CNN: Assume images of shape (64 ⨉ 64 ⨉ 3) by default """
         super().__init__(name=name)
 
-        deconv2d = lambda *args, **kwargs: (
-            layers.TimeDistributed(layers.Conv2DTranspose(*args, **kwargs))
-            if time_distributed else
-            layers.Conv2DTranspose(*args, **kwargs)
-        )
+        deconv2d = layers.Conv2DTranspose
+
         depth = 32
         kwargs = dict(strides=2, activation='relu')
         self._dense = layers.Dense(32 * depth)
@@ -284,17 +283,18 @@ class ConvDecoder(Module):
 
     def call(self, x):
         x = self._dense(x)
-        shape = tf.concat([tf.shape(x)[:-1], [1, 1, x.shape[-1]]], 0)
-        x = tf.reshape(x, shape)
+        B, T =  x.shape[:2]
+        x = tf.reshape(x, [B*T, 1, 1, x.shape[-1]])
         x = self._deconv1(x)
         x = self._deconv2(x)
         x = self._deconv3(x)
         x = self._deconv4(x)
+        x = tf.reshape(x, (B, T, *x.shape[-3:]))
 
         return tfd.Independent(tfd.Normal(x, 1), 3)
 
 
-def create_model(config, env):
+def create_components(config, env):
     obs_shape = env.obs_shape
     action_dim = env.action_dim
     is_action_discrete = env.is_action_discrete
@@ -317,3 +317,43 @@ def create_model(config, env):
     if disc_config:
         models['discount'] = Decoder(disc_config, dist='binary', name='discount')
     return models
+
+class Dreamer(Ensemble):
+    def __init__(self, config, env, **kwargs):
+        super().__init__(
+            model_fn=create_components, 
+            config=config,
+            env=env,
+            **kwargs)
+    
+    @tf.function
+    def action(self, x, state, mask,
+            prev_action, prev_reward=None,
+            evaluation=False, epsilon=0,
+            temp=1., return_stats=False,
+            return_eval_stats=False):
+        assert x.shape.ndims in (2, 4), x.shape
+
+        mask = tf.cast(tf.reshape(mask, (-1, 1)), 
+            global_policy().compute_dtype)
+        state = tf.nest.map_structure(lambda x: x * mask, state)
+        prev_action = prev_action * mask
+
+        embed = self.encoder(x)
+        embed = tf.squeeze(embed, 1)
+        state = self.rssm.post_step(state, prev_action, embed)
+        feature = self.rssm.get_feat(state)
+        if evaluation:
+            action = self.actor(feature)[0].mode()
+        else:
+            action = self.actor(feature)[0].sample()
+            action = tf.clip_by_value(
+                tfd.Normal(action, epsilon).sample(), -1, 1)
+            
+        return (action, {}), state
+
+    def get_initial_state(self, inputs=None, batch_size=None, dtype=None):
+        return self.rssm.get_initial_state(inputs, batch_size, dtype)
+    
+def create_model(config, env, **kwargs):
+    return Dreamer(config, env, **kwargs)

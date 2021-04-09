@@ -2,9 +2,6 @@ import numpy as np
 import gym
 
 
-from env import wrappers
-
-
 def make_dmc_env(config):
     assert 'dmc' in config['name']
     task = config['name'].split('_', 1)[-1]

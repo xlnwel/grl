@@ -6,6 +6,7 @@ import uuid
 import numpy as np
 
 from core.decorator import config
+from replay.local import EpisodicBuffer
 from replay.utils import load_data, save_data
 
 logger = logging.getLogger(__name__)
@@ -20,6 +21,7 @@ class EpisodicReplay:
         self._memory = {}
         self._sample_size = getattr(self, '_sample_size', None)
         self._state_keys = state_keys
+        self._tmp_bufs = []
     
     def name(self):
         return self._replay_type
@@ -30,6 +32,13 @@ class EpisodicReplay:
     def __len__(self):
         return len(self._memory)
 
+    def add(self, i, reset, **data):
+        while i >= len(self._tmp_bufs):
+            self._tmp_bufs.append(EpisodicBuffer({}))
+        self._tmp_bufs[i].add(**data)
+        if reset:
+            self.merge(self._tmp_bufs[i].sample())
+        
     def merge(self, episodes):
         if isinstance(episodes, dict):
             episodes = [episodes]
