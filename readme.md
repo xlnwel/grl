@@ -47,7 +47,7 @@ All implementation details from OpenAI's baselines are implemented for PPO famil
 
 ### Model-Based RL
 
-- [x] Dreamer<sup>[1](dreamer)</sup>
+- [x] Dreamer
 
 ### Imitation Learning
 
@@ -67,7 +67,7 @@ All implementation details from OpenAI's baselines are implemented for PPO famil
 - [x] SENet
 - [x] SN (Spectral Norm)
 
-<a name="example"></a>## Get Started
+## <a name="example"></a>Get Started
 
 ```shell
 python run/train.py algo -e env
@@ -194,5 +194,3 @@ https://github.com/microsoft/FQF
 https://github.com/rwightman/pytorch-image-models
 
 https://github.com/juntang-zhuang/Adabelief-Optimizer
-
-<a name="dreamer">1</a>: dreamer was tested before, but some dependent code such as `Runner` has been changed since then. Due to the expiration of my mojuco liscence, I can no longer test it and I decide to leave it as it is.
