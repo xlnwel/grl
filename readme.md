@@ -2,9 +2,15 @@
 
 A modulated and versatile library for deep reinforcement learning, implemented in *Tensorflow2.4*.
 
+## Instructions
+
+If you want to know how an algorithm works, simply study `agent.py` and `nn.py`.
+
+If you want to run some algorithm, see [Get Start](#example).
+
 ## Current Implemented Algorithms/Networks
 
-Many algorithms are simply improvements/minor modifications of their predecessors. Therefore, instead of implementing them as separate algorithms, we provide options to turn these on/off in `config.yaml`. Refer to [algo/readme.md](https://github.com/xlnwel/D2RL/blob/main/algo/readme.md) for more details.
+Many algorithms are simply improvements/minor modifications of their predecessors. Therefore, instead of implementing them as separate algorithms, we provide options to turn these on/off in `config.yaml`. Refer to [algo/readme.md](https://github.com/xlnwel/d2rl/blob/master/algo/readme.md) for more details.
 
 ### On Policy RL
 
@@ -61,7 +67,7 @@ All implementation details from OpenAI's baselines are implemented for PPO famil
 - [x] SENet
 - [x] SN (Spectral Norm)
 
-## Get Started
+<a name="example"></a>## Get Started
 
 ```shell
 python run/train.py algo -e env
