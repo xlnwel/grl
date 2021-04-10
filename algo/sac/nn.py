@@ -5,7 +5,7 @@ from tensorflow.keras import layers
 
 from core.module import Module, Ensemble
 from core.decorator import config
-from utility.rl_utils import logpi_correction, epsilon_greedy
+from utility.rl_utils import logpi_correction, epsilon_greedy, q_log_prob
 from utility.schedule import TFPiecewiseSchedule
 from nn.func import mlp
 from nn.utils import get_initializer
@@ -19,6 +19,7 @@ class Actor(Module):
         self._action_dim = action_dim
         self.LOG_STD_MIN = config.pop('LOG_STD_MIN', -20)
         self.LOG_STD_MAX = config.pop('LOG_STD_MAX', 2)
+        self._tsallis_q = config.pop('tsallis_q', 1)
 
         out_size = 2*action_dim
         self._layers = mlp(**config, out_size=out_size, name=name)
@@ -37,6 +38,8 @@ class Actor(Module):
         if evaluation:
             raw_logpi = dist.log_prob(raw_action)
             logpi = logpi_correction(raw_action, raw_logpi, is_action_squashed=False)
+            if self._tsallis_q != 1:
+                logpi = q_log_prob(tf.exp(logpi), self._tsallis_q)
             return action, {'logpi': logpi}
 
         return action
@@ -52,6 +55,8 @@ class Actor(Module):
         action = tf.tanh(raw_action)
         logpi = logpi_correction(raw_action, raw_logpi, is_action_squashed=False)
         
+        if self._tsallis_q != 1:
+            logpi = q_log_prob(tf.exp(logpi), self._tsallis_q)
         terms = dict(
             raw_act_std=std,
         )

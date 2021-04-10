@@ -151,8 +151,8 @@ if __name__ == '__main__':
                     separate_process=len(algo_env) > 1, delay=cmd_args.delay)
 
                 if cmd_args.grid_search:
-                    if 'ppo' in algo:
-                        processes += gs(normalize_reward=[True, False], value=dict(norm=['layer', None]), lr=np.logspace(-4, -3, 2))
+                    if 'sac' in algo:
+                        processes += gs(tsallis_q=[1, 1.2, 1.5])
                     else:
                         processes += gs()
                 else:

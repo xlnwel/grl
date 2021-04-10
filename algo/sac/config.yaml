@@ -26,6 +26,8 @@ agent:
     n_steps: &nsteps 3
     polyak: .995
 
+    tsallis_q: 1
+
     act_eps: 0
     eval_act_eps: 0
 

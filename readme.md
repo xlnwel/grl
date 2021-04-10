@@ -4,9 +4,9 @@ A modulated and versatile library for deep reinforcement learning, implemented i
 
 ## Instructions
 
-If you want to know how an algorithm works, simply study `agent.py` and `nn.py`.
+If you want to know how an algorithm works, simply study `agent.py` and `nn.py` in each folder of [algo](https://github.com/xlnwel/d2rl/tree/master/algo).
 
-If you want to run some algorithm, see [Get Start](#example).
+If you want to run some algorithm, refer to [Get Start](#example).
 
 ## Current Implemented Algorithms/Networks
 
@@ -86,7 +86,7 @@ python run/train.py apex-iqn -e procgen_coinrun
 
 By default, all the checkpoints and loggings are saved to `./logs/{env}/{algo}/{model_name}/`.
 
-You can also make some simple changes to `*config.yaml` from command line
+You can also make some simple changes to `*config.yaml` from the command line
 
 ```
 # change learning rate to 0.0001, `lr` must appear in `*config.yaml`

@@ -101,3 +101,6 @@ def compute_act_temp(min_temp, max_temp, n_exploit_envs, worker_id, n_workers, e
         act_temps = act_temps.reshape(n_workers, envs_per_worker)[worker_id]
     
     return act_temps
+
+def q_log_prob(x, q):
+    return (x**(q-1) - 1) / (q-1)
