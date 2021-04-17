@@ -30,7 +30,6 @@ class IMPALACNN(Module):
                  ),
                  out_activation='relu',
                  out_size=None,
-                 deter_stoch=False,
                  name='impala',
                  **kwargs):
         super().__init__(name=name)
@@ -70,18 +69,10 @@ class IMPALACNN(Module):
             if self.out_size:
                 if out_activation is None:
                     self._layers.append[layers.ReLU()]
-                if deter_stoch:
-                    ds_cls = block_registry.get('dss')
-                    self._dense = self._ds_layer = ds_cls(
-                        'dense',
-                        self.out_size, 
-                        activation=out_activation, 
-                        name=f'{prefix}out')
-                else:
-                    self._dense = layers.Dense(
-                        self.out_size, 
-                        activation=out_act_cls(), 
-                        name=f'{prefix}out')
+                self._dense = layers.Dense(
+                    self.out_size, 
+                    activation=out_act_cls(), 
+                    name=f'{prefix}out')
         
         self._training_cls += [subsample_cls, block_cls]
     
