@@ -2,7 +2,6 @@ import tensorflow as tf
 
 from core.tf_config import build
 from core.decorator import override
-from core.optimizer import Optimizer
 from algo.ppo.base import PPOBase
 
 
@@ -12,10 +11,11 @@ def collect(buffer, env, step, reset, **kwargs):
 class Agent(PPOBase):
     @override(PPOBase)
     def _construct_optimizers(self):
-        super()._construct_optimizers()
-        self._disc_opt = Optimizer(
-            self._optimizer, self.discriminator, self._disc_lr)
-    
+        models = super()._construct_optimizers()
+        self._disc_opt = self._construct_opt(self.discriminator, self._disc_lr)
+        models.append(self.discriminator)
+        return models
+
     @override(PPOBase)
     def _build_learn(self, env):
         # Explicitly instantiate tf.function to avoid unintended retracing

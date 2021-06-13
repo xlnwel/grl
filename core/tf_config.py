@@ -6,7 +6,7 @@ from tensorflow.keras import mixed_precision
 logger = logging.getLogger(__name__)
 
 def configure_gpu(idx=0):
-    """Configure gpu for Tensorflow
+    """ Configures gpu for Tensorflow
     Args:
         idx: index(es) of PhysicalDevice objects returned by `list_physical_devices`
     """
@@ -42,7 +42,7 @@ def silence_tf_logs():
     tf.get_logger().setLevel('ERROR')
 
 def get_TensorSpecs(TensorSpecs, sequential=False, batch_size=None):
-    """Construct a dict/list of TensorSpecs
+    """ Construcs a dict/list of TensorSpecs
     
     Args:
         TensorSpecs: A dict/list/tuple of arguments for tf.TensorSpec
@@ -64,7 +64,7 @@ def get_TensorSpecs(TensorSpecs, sequential=False, batch_size=None):
         if isinstance(x, tf.TensorSpec):
             return x
         elif isinstance(x, (list, tuple)):
-            if len(x) > 1 and isinstance(x[1], tuple):
+            if hasattr(x, '_fields') or (len(x) > 1 and isinstance(x[1], tuple)):
                 # x is a list/tuple of TensorSpecs, recursively construct them
                 return get_TensorSpecs(x, sequential=sequential, batch_size=batch_size)
             if len(x) == 1:
@@ -113,7 +113,7 @@ def get_TensorSpecs(TensorSpecs, sequential=False, batch_size=None):
         return type(TensorSpecs)(tensorspecs)
 
 def build(func, TensorSpecs, sequential=False, batch_size=None, print_terminal_info=False):
-    """Build a concrete function of func
+    """ Builds a concrete function of func, initializing all variables
 
     Args:
         func: A function decorated by @tf.function

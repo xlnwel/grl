@@ -1,5 +1,6 @@
 import tensorflow as tf
 
+from utility.tf_utils import tensor2numpy
 from core.tf_config import build
 from core.decorator import override
 from core.base import Memory
@@ -39,30 +40,36 @@ class Agent(Memory, PPOBase):
 
     """ Call """
     # @override(PPOBase)
-    def _process_input(self, obs, evaluation, env_output):
-        obs, kwargs = super()._process_input(obs, evaluation, env_output)
-        obs, kwargs = self._add_memory_state_to_kwargs(obs, env_output, kwargs)
+    def _process_input(self, env_output, evaluation):
+        obs, kwargs = super()._process_input(env_output, evaluation)
+        mask = 1. - env_output.reset
+        kwargs = self._add_memory_state_to_kwargs(obs, mask, kwargs=kwargs)
         return obs, kwargs
 
     # @override(PPOBase)
     def _process_output(self, obs, kwargs, out, evaluation):
-        out = self._add_tensor_memory_state_to_terms(obs, kwargs, out, evaluation)
+        out = self._add_tensors_to_terms(obs, kwargs, out, evaluation)
         out = super()._process_output(obs, kwargs, out, evaluation)
-        out = self._add_non_tensor_memory_states_to_terms(out, kwargs, evaluation)
+        out = self._add_non_tensors_to_terms(out, kwargs, evaluation)
         return out
 
     """ PPO methods """
     @override(PPOBase)
     def record_last_env_output(self, env_output):
-        self.update_obs_rms(env_output.obs)
         self._env_output = EnvOutput(
             self.normalize_obs(env_output.obs), *env_output[1:])
 
     @override(PPOBase)
-    def compute_value(self, env_output=None, return_state=False):
+    def compute_value(self, obs=None, state=None, mask=None, prev_reward=None, return_state=False):
         # be sure obs is normalized if obs normalization is required
-        env_output = env_output or self._env_output
-        obs, kwargs = self._add_memory_state_to_kwargs(env_output.obs, env_output, {})
+        if obs is None:
+            obs = self._env_output.obs
+        if state is None:
+            state = self._state
+        if mask is None:
+            mask = 1. - self._env_output.reset
+        kwargs = self._add_memory_state_to_kwargs(
+            obs, mask, state=state, prev_reward=prev_reward)
         kwargs['return_state'] = return_state
         out = self.model.compute_value(obs, **kwargs)
-        return tf.nest.map_structure(lambda x: x.numpy(), out)
+        return tensor2numpy(out)

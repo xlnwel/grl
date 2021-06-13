@@ -2,7 +2,7 @@ import logging
 import numpy as np
 
 from replay.utils import init_buffer, print_buffer
-from algo.ppo.buffer import compute_gae, Buffer as BufferBase
+from algo.ppo.buffer import Buffer as BufferBase
 
 
 logger = logging.getLogger(__name__)
@@ -36,22 +36,14 @@ class Buffer(BufferBase):
         self._memory['obs_norm'] = obs_norm
         self.reshape_to_store()
 
-        self._memory['traj_ret_int'], adv_int = \
-            compute_gae(reward=reward_int, 
-                        discount=self._memory['discount_int'],
-                        value=self._memory['value_int'],
-                        last_value=last_value_int,
-                        gamma=self._gamma_int,
-                        gae_discount=self._gae_discount_int,
-                        norm_adv=False)
-        self._memory['traj_ret_ext'], adv_ext = \
-            compute_gae(reward=self._memory['reward'], 
-                        discount=self._memory['discount'],
-                        value=self._memory['value_ext'],
-                        last_value=last_value_ext,
-                        gamma=self._gamma,
-                        gae_discount=self._gae_discount,
-                        norm_adv=False)
+        adv_int, self._memory['traj_ret_int'] = self._compute_advantage_return(
+            reward_int, self._memory['discount_int'], 
+            self._memory['value_int'], last_value_int
+        )
+        adv_ext, self._memory['traj_ret_ext'] = self._compute_advantage_return(
+            self._memory['reward'], self._memory['discount'], 
+            self._memory['value_ext'], last_value_ext
+        )
 
         self._memory['advantage'] = self._int_coef*adv_int + self._ext_coef*adv_ext
 

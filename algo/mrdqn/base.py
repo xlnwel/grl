@@ -2,7 +2,7 @@ import tensorflow as tf
 
 from core.tf_config import build
 from core.decorator import override
-from core.base import Memory
+from core.mixin import Memory
 from algo.dqn.base import DQNBase
 
 
@@ -67,23 +67,26 @@ class RDQNBase(Memory, DQNBase):
                 for name, sz in self.model.state_size._asdict().items()])
         if self._additional_rnn_inputs:
             if 'prev_action' in self._additional_rnn_inputs:
-                TensorSpecs['prev_action'] = ((seqlen, *env.action_shape), env.action_dtype, 'prev_action')
+                TensorSpecs['prev_action'] = (
+                    (seqlen, *env.action_shape), env.action_dtype, 'prev_action')
             if 'prev_reward' in self._additional_rnn_inputs:
-                TensorSpecs['prev_reward'] = ((seqlen,), self._dtype, 'prev_reward')    # this reward should be unnormlaized
+                TensorSpecs['prev_reward'] = (
+                    (seqlen,), self._dtype, 'prev_reward')    # this reward should be unnormlaized
         self.learn = build(self._learn, TensorSpecs, batch_size=self._batch_size)
 
     """ Call """
     # @override(DQNBase)
-    def _process_input(self, obs, evaluation, env_output):
-        obs, kwargs = super()._process_input(obs, evaluation, env_output)
-        obs, kwargs = self._add_memory_state_to_kwargs(obs, env_output, kwargs)
+    def _process_input(self, env_output, evaluation):
+        obs, kwargs = super()._process_input(env_output, evaluation)
+        mask = 1. - env_output.reset
+        kwargs = self._add_memory_state_to_kwargs(obs, mask, kwargs=kwargs)
         return obs, kwargs
 
     # @override(DQNBase)
     def _process_output(self, obs, kwargs, out, evaluation):
-        out = self._add_tensor_memory_state_to_terms(obs, kwargs, out, evaluation)
+        out = self._add_tensors_to_terms(obs, kwargs, out, evaluation)
         out = super()._process_output(obs, kwargs, out, evaluation)
-        out = self._add_non_tensor_memory_states_to_terms(out, kwargs, evaluation)
+        out = self._add_non_tensors_to_terms(out, kwargs, evaluation)
         return out
 
     def _compute_priority(self, priority):
@@ -115,7 +118,7 @@ class RDQNBase(Memory, DQNBase):
             add_inp.append(prev_action)
         if prev_reward is not None:
             prev_reward = tf.concat([prev_reward, reward[:, :-1]], axis=1)
-            add_inp.append(prev_action)
+            add_inp.append(prev_reward)
         
         target, terms = self._compute_target(
             obs, action, reward, discount, 

@@ -13,6 +13,7 @@ from core.optimizer import Optimizer
 logger = logging.getLogger(__name__)
 
 def record(init_fn):
+    """ Setups Tensorboard for recording """
     def wrapper(self, *, config, name='monitor', **kwargs):
         self.name = name or f'{config["algorithm"]}'
         self._root_dir = root_dir = config['root_dir']
@@ -96,6 +97,7 @@ def agent_config(init_fn):
     return wrapper
 
 def config(init_fn):
+    """ Adds config to attr """
     def wrapper(self, config, *args, **kwargs):
         config_attr(self, config)
 
@@ -104,6 +106,7 @@ def config(init_fn):
     return wrapper
 
 def step_track(learn_log):
+    """ Tracks the training and environment steps """
     @wraps(learn_log)
     def wrapper(self, step=0, **kwargs):
         if step > self.env_step:

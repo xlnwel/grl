@@ -39,6 +39,7 @@ def scalar_summary(writer, stats, prefix=None, step=None):
                 continue
             if '/' not in k:
                 k = f'{prefix}/{k}'
+            # print(k, np.array(v).dtype)
             tf.summary.scalar(k, tf.reduce_mean(v), step=step)
 
 def histogram_summary(writer, stats, prefix=None, step=None):
@@ -81,15 +82,17 @@ def contains_stats(logger, key):
     return key in logger
     
 def save_code(root_dir, model_name):
+    """ Saves the code so that we can check the chagnes latter """
     dest_dir = f'{root_dir}/{model_name}/src'
     if os.path.isdir(dest_dir):
         shutil.rmtree(dest_dir)
     
     shutil.copytree('.', dest_dir, 
         ignore=shutil.ignore_patterns(
-            '*logs*', '*/data/*', '.*', '*pycache*', '*.md', '*test*'))
+            '*logs*', 'data*', '*data*' '*/data/*', '.*', '*pycache*', '*.md', '*test*'))
 
 def clear_ndarray(config):
+    """ Converts ndarray to list, useful for saving config as a yaml file """
     for k, v in config.items():
         if isinstance(v, dict):
             config[k] = clear_ndarray(v)
@@ -289,6 +292,7 @@ class Logger:
             print("-"*n_slashes)
         for key in self._log_headers:
             val = self._log_current_row.get(key, "")
+            # print(key, np.array(val).dtype)
             valstr = f"{val:8.3g}" if hasattr(val, "__float__") else val
             if print_terminal_info:
                 print(f'| {key:>{max_key_len}s} | {valstr:>15s} |')

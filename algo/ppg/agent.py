@@ -1,13 +1,11 @@
 import logging
-import numpy as np
 import tensorflow as tf
 from tensorflow_probability import distributions as tfd
 
 from utility.schedule import TFPiecewiseSchedule
-from utility.tf_utils import explained_variance
+from utility.tf_utils import explained_variance, tensor2numpy
 from utility.rl_loss import ppo_loss
 from core.tf_config import build
-from core.optimizer import Optimizer
 from core.decorator import override
 from algo.ppo.base import PPOBase, collect
 
@@ -34,25 +32,24 @@ class Agent(PPOBase):
             self._aux_lr = TFPiecewiseSchedule(self._aux_lr)
 
         actor_models = [self.encoder, self.actor]
-        if hasattr(self, 'rnn'):
-            actor_models.append(self.rnn)
-        self._actor_opt = Optimizer(
-            self._optimizer, actor_models, self._actor_lr, 
-            clip_norm=self._clip_norm, epsilon=self._opt_eps)
+        if hasattr(self, 'actor_rnn'):
+            actor_models.append(self.actor_rnn)
+        logger.info(f'Actor model: {actor_models}')
+        self._actor_opt = self._construct_opt(actor_models, self._actor_lr)
 
         value_models = [self.value]
         if hasattr(self, 'value_encoder'):
             value_models.append(self.value_encoder)
         if hasattr(self, 'value_rnn'):
             value_models.append(self.value_rnn)
-        self._value_opt = Optimizer(
-            self._optimizer, value_models, self._value_lr, 
-            clip_norm=self._clip_norm, epsilon=self._opt_eps)
+        logger.info(f'Value model: {value_models}')
+        self._value_opt = self._construct_opt(value_models, self._value_lr)
         
         aux_models = list(self.model.values())
-        self._aux_opt = Optimizer(
-            self._optimizer, aux_models, self._aux_lr, 
-            clip_norm=self._clip_norm, epsilon=self._opt_eps)
+        self._aux_opt = self._construct_opt(aux_models, self._aux_lr)
+        logger.info(f'Auxiliary model: {aux_models}')
+
+        return actor_models + value_models + [self.aux_value]
 
     @override(PPOBase)
     def _build_learn(self, env):
@@ -77,7 +74,7 @@ class Agent(PPOBase):
     """ PPG methods """
     def compute_aux_data(self, obs):
         out = self.model.compute_aux_data(obs)
-        out = tf.nest.map_structure(lambda x: x.numpy(), out)
+        out = tensor2numpy(out)
         return out
 
     def aux_learn_log(self, step):
@@ -98,15 +95,8 @@ class Agent(PPOBase):
             if self._value_update is not None:
                 last_value = self.compute_value()
                 self.dataset.aux_finish(last_value)
-        if self.N_AUX_EPOCHS:
-            self.store(**{'aux/kl': kl})
-            
-            if self._to_summary(step):
-                self._summary(data, terms)
 
-            return i * self.N_MBS + j
-        else:
-            return 0
+        self.store(**{'aux/kl': kl})
 
     @tf.function
     def _learn(self, obs, action, value, traj_ret, advantage, logpi, state=None, mask=None):
@@ -133,6 +123,12 @@ class Agent(PPOBase):
         terms['value_norm'] = self._value_opt(tape, value_loss)
 
         terms.update(dict(
+            x=tf.reduce_mean(x),
+            x_std=tf.math.reduce_std(x),
+            x_max=tf.math.reduce_max(x),
+            x_value=tf.reduce_mean(x_value),
+            x_value_std=tf.math.reduce_std(x_value),
+            x_value_max=tf.math.reduce_max(x_value),
             value=value,
             advantage=advantage, 
             ratio=tf.exp(log_ratio), 

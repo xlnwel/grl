@@ -7,6 +7,7 @@ from tensorflow.keras import mixed_precision as prec
 logger = logging.getLogger(__name__)
 
 def select_optimizer(name):
+    # add custom optimizers here
     opts = dict(
         adam=tf.keras.optimizers.Adam,
         rmsprop=tf.keras.optimizers.RMSprop,

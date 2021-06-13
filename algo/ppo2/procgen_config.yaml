@@ -67,7 +67,8 @@ agent:
     schedule_lr: False
     lr: 5e-4
     clip_norm: .5
-    opt_eps: 1e-5
+    opt_kwargs:
+        epsilon: 1.e-5
     # arguments for loss
     value_loss: clip
     clip_range: .2          # clip range for ppo
@@ -84,5 +85,4 @@ buffer:
     sample_keys: [obs, action, value, traj_ret, advantage, logpi, mask, h, c]
     # sample_keys: [obs, action, value, traj_ret, advantage, logpi, mask, h, c, prev_action, prev_reward]
     sample_size: *ss
-    shuffle: True
     # mini-batch size = n_workers * n_envs * epslen / n_mbs

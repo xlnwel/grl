@@ -2,8 +2,6 @@ import collections
 import logging
 import numpy as np
 
-from env.wrappers import get_wrapper_by_name
-
 logger = logging.getLogger(__name__)
 
 class RunMode:
@@ -12,7 +10,8 @@ class RunMode:
 
 
 class Runner:
-    def __init__(self, env, agent, step=0, nsteps=None, run_mode=RunMode.NSTEPS):
+    def __init__(self, env, agent, step=0, nsteps=None, 
+                run_mode=RunMode.NSTEPS, record_envs=None, info_func=None):
         self.env = env
         if env.max_episode_steps == int(1e9):
             logger.info(f'Maximum episode steps is not specified'
@@ -25,7 +24,7 @@ class Runner:
                 f'as run_mode == {RunMode.TRAJ} and env_type == EnvVec')
         self.env_output = self.env.output()
         self.episodes = np.zeros(env.n_envs)
-        assert get_wrapper_by_name(self.env, 'EnvStats').auto_reset
+        assert getattr(self.env, 'auto_reset', None), getattr(self.env, 'auto_reset', None)
         self.run = {
             f'{RunMode.NSTEPS}-Env': self._run_env,
             f'{RunMode.NSTEPS}-EnvVec': self._run_envvec,
@@ -36,25 +35,26 @@ class Runner:
         self._frame_skip = getattr(env, 'frame_skip', 1)
         self._frames_per_step = self.env.n_envs * self._frame_skip
         self._default_nsteps = nsteps or env.max_episode_steps // self._frame_skip
+        
+        record_envs = record_envs or self.env.n_envs
+        self._record_envs = list(range(record_envs))
+
+        self._info_func = info_func
 
     def _run_env(self, *, action_selector=None, step_fn=None, nsteps=None):
         action_selector = action_selector or self.agent
         nsteps = nsteps or self._default_nsteps
         obs = self.env_output.obs
-        reset = self.env_output.reset
-        
+
         for t in range(nsteps):
-            action = action_selector(
-                self.env_output,
-                evaluation=False)
+            action = action_selector(self.env_output, evaluation=False)
             obs, reset = self.step_env(obs, action, step_fn)
 
             # logging when env is reset 
             if reset:
                 info = self.env.info()
                 if 'score' in info:
-                    self.agent.store(
-                        score=info['score'], epslen=info['epslen'])
+                    self.store_info(info)
                     self.episodes += 1
 
         return self.step
@@ -63,24 +63,21 @@ class Runner:
         action_selector = action_selector or self.agent
         nsteps = nsteps or self._default_nsteps
         obs = self.env_output.obs
-        reset = self.env_output.reset
         
         for t in range(nsteps):
-            action = action_selector(
-                self.env_output,
-                evaluation=False)
+            action = action_selector(self.env_output, evaluation=False)
             obs, reset = self.step_env(obs, action, step_fn)
             
             # logging when any env is reset 
-            done_env_ids = [i for i, r in enumerate(reset) if r]
+            done_env_ids = [i for i, r in enumerate(reset)
+                if (np.all(r) if isinstance(r, np.ndarray) else r)]
             if done_env_ids:
                 info = self.env.info(done_env_ids)
                 # further filter done caused by life loss
                 done_env_ids = [k for k, i in enumerate(info) if i.get('game_over')]
-                info = [info[i] for i in done_env_ids]
-                score = [i['score'] for i in info]
-                epslen = [i['epslen'] for i in info]
-                self.agent.store(score=score, epslen=epslen)
+                info = [info[i] for i in done_env_ids if i in self._record_envs]
+                if info:
+                    self.store_info(info)
                 self.episodes[done_env_ids] += 1
 
         return self.step
@@ -88,42 +85,35 @@ class Runner:
     def _run_traj_env(self, action_selector=None, step_fn=None):
         action_selector = action_selector or self.agent
         obs = self.env_output.obs
-        reset = self.env_output.reset
         
         for t in range(self._default_nsteps):
-            action = action_selector(
-                self.env_output,
-                evaluation=False)
+            action = action_selector(self.env_output, evaluation=False)
             obs, reset = self.step_env(obs, action, step_fn)
 
             if reset:
                 break
         
         info = self.env.info()
-        self.agent.store(
-            score=info['score'], epslen=info['epslen'])
+        self.store_info(info)
         self.episodes += 1
-                
+
         return self.step
 
     def _run_traj_envvec(self, action_selector=None, step_fn=None):
+        # TODO: make it work
         action_selector = action_selector or self.agent
-        self.env_output = self.env.reset()  # explicitly reset envvect to turn off auto-reset
         obs = self.env_output.obs
         
         for t in range(self._default_nsteps):
-            action = action_selector(
-                self.env_output,
-                evaluation=False)
-            obs, _ = self.step_env(obs, action, step_fn, mask=True)
+            action = action_selector(self.env_output, evaluation=False)
+            obs, reset = self.step_env(obs, action, step_fn, mask=True)
 
             # logging when any env is reset 
-            if np.all(self.env_output.discount == 0):
+            if np.all(reset):
                 break
-        info = self.env.info()
-        score = [i['score'] for i in info]
-        epslen = [i['epslen'] for i in info]
-        self.agent.store(score=score, epslen=epslen)
+
+        info = [i for idx, i in enumerate(self.env.info()) if idx in self._record_envs]
+        self.store_info(info)
         self.episodes += 1
 
         return self.step
@@ -158,6 +148,17 @@ class Runner:
             step_fn(self.env, self.step, reset, **kwargs)
 
         return next_obs, reset
+    
+    def store_info(self, info):
+        if isinstance(info, list):
+            score = [i['score'] for i in info]
+            epslen = [i['epslen'] for i in info]
+        else:
+            score = info['score']
+            epslen = info['epslen']
+        self.agent.store(score=score, epslen=epslen)
+        if self._info_func is not None:
+            self._info_func(self.agent, info)
 
 def evaluate(env, 
              agent, 
@@ -168,7 +169,6 @@ def evaluate(env,
              step_fn=None, 
              record_stats=False,
              n_windows=4):
-    assert get_wrapper_by_name(env, 'EnvStats') is not None
     scores = []
     epslens = []
     max_steps = env.max_episode_steps // getattr(env, 'frame_skip', 1)
@@ -183,6 +183,7 @@ def evaluate(env,
     n_done_eps = 0
     frame_skip = None
     obs = env_output.obs
+    prev_done = np.zeros(env.n_envs)
     while n_done_eps < n:
         for k in range(max_steps):
             if record:
@@ -229,7 +230,9 @@ def evaluate(env,
                             agent.reset_states()
                     break
             else:
-                done_env_ids = [i for i, (d, m) in enumerate(zip(env.game_over(), env.mask())) if d and m]
+                done = env.game_over()
+                done_env_ids = [i for i, (d, pd) in 
+                    enumerate(zip(done, prev_done)) if d and not pd]
                 n_done_eps += len(done_env_ids)
                 if done_env_ids:
                     score = env.score(done_env_ids)
@@ -245,6 +248,7 @@ def evaluate(env,
                                 t[ri] = s[i]
                     elif n_done_eps == n:
                         break
+                prev_done = done
 
     if record:
         max_len = np.max([len(f) for f in frames])

@@ -68,11 +68,12 @@ agent:
     fpn_lr: 2.5e-9
     ent_coef: .001
     clip_norm: 10
-    opt_eps: 3.125e-4
+    opt_kwargs:
+        epsilon: 3.125e-4
 
     # arguments for PER
     per_alpha: .6
-    per_epsilon: 1e-4
+    per_epsilon: 1.e-4
     
 
 replay:

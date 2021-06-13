@@ -33,14 +33,10 @@ class Actor(Module):
         dist = tfd.MultivariateNormalDiag(mu, std*temp)
         raw_action = dist.mode() if evaluation else dist.sample()
         action = tf.tanh(raw_action)
+        if evaluation:
+            return action
         if isinstance(epsilon, tf.Tensor) or epsilon:
             action = epsilon_greedy(action, epsilon, False)
-        if evaluation:
-            raw_logpi = dist.log_prob(raw_action)
-            logpi = logpi_correction(raw_action, raw_logpi, is_action_squashed=False)
-            if self._tsallis_q != 1:
-                logpi = q_log_prob(tf.exp(logpi), self._tsallis_q)
-            return action, {'logpi': logpi}
 
         return action
 

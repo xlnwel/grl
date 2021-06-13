@@ -66,8 +66,8 @@ def create_components(config, env):
         )
     elif config['architecture'] == 'dual':
         models = dict(
-            encoder=Encoder(config['encoder']), 
-            value_encoder=Encoder(config['encoder'], name='value_encoder'), 
+            encoder=Encoder(config['actor_encoder'], name='actor_encoder'), 
+            value_encoder=Encoder(config['value_encoder'], name='value_encoder'), 
             actor=Actor(config['actor'], action_dim, is_action_discrete),
             value=Value(config['value']),
             aux_value=Value(config['value'], name='aux_value'),

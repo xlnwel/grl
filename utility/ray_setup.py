@@ -18,7 +18,7 @@ def cpu_affinity(name=None):
     if 'CPU' in resources:
         cpus = [v[0] for v in resources['CPU']]
     else:
-        cpus = [0, 1, 2]
+        raise ValueError(f'No cpu is available')
     psutil.Process().cpu_affinity(cpus)
     if name:
         print(f'CPUs corresponding to {name}: {cpus}')

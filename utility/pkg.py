@@ -19,11 +19,12 @@ def get_package(algo, place=0, separator='.', root_dir=None):
 
     return pkg
 
-def import_module(name=None, algo=None, *, config=None, place=0):
-    """ import module according to algo or algorithm in config """
-    algo = algo or config['algorithm']
-    assert isinstance(algo, str), algo
-    pkg = get_package(algo=algo, place=place)
+def import_module(name=None, pkg=None, algo=None, *, config=None, place=0):
+    """ import <name> module according to algo or algorithm in config """
+    if pkg is None:
+        algo = algo or config['algorithm']
+        assert isinstance(algo, str), algo
+        pkg = get_package(algo=algo, place=place)
     m = importlib.import_module(f'{pkg}.{name}')
 
     return m

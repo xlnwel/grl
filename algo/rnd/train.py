@@ -96,12 +96,12 @@ def train(agent, env, eval_env, buffer):
                 agent.store(eval_score=scores, eval_epslen=epslens)
 
         if to_log(agent.train_step) and agent.contains_stats('score'):
-            agent.store(
-                episodes=runner.episodes,
-                train_step=agent.train_step,
-                env_time=tt.total(), 
-                train_time=tt.total()
-            )
+            agent.store(**{
+                'episodes': runner.episodes,
+                'train_step': agent.train_step,
+                'time/run': rt.total(), 
+                'time/train': tt.total()
+            })
             agent.log(step)
             agent.save()
 
@@ -136,11 +136,11 @@ def main(env_config, model_config, agent_config, buffer_config):
     buffer_config['n_envs'] = env.n_envs
     buffer = Buffer(buffer_config)
     
-    agent = Agent(name='ppo', 
-                config=agent_config, 
-                models=models, 
-                dataset=buffer,
-                env=env)
+    agent = Agent(
+        config=agent_config, 
+        models=models, 
+        dataset=buffer,
+        env=env)
 
     agent.save_config(dict(
         env=env_config,

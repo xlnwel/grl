@@ -3,8 +3,6 @@ import inspect
 import tensorflow as tf
 from tensorflow.keras import layers
 
-from nn.utils import Dummy
-
 
 class Module(tf.Module):
     """ This class is an alternative to keras.layers.Layer when 
@@ -24,9 +22,9 @@ class Module(tf.Module):
     def __call__(self, *args, **kwargs):
         if not self._is_built:
             self._build(*tf.nest.map_structure(
-                lambda x: x.shape if isinstance(x, tf.Tensor) else x, args))
+                lambda x: x.shape if hasattr(x, 'shape') else x, args))
         if hasattr(self, '_layers') and isinstance(self._layers, (list, tuple)):
-            self._layers = [l for l in self._layers if not isinstance(l, Dummy)]
+            self._layers = [l for l in self._layers if isinstance(l, tf.Module)]
 
         return self._call(*args, **kwargs)
         
@@ -69,8 +67,8 @@ class Module(tf.Module):
 
 
 class Ensemble:
-    """ This class groups all models used by off-policy algorithms together
-    so that one can easily get and set all variables """
+    """ This class groups all models together so that 
+    one can easily get and set all variables """
     def __init__(self, 
                  *,
                  models=None, 
@@ -87,7 +85,7 @@ class Ensemble:
             if not isinstance(v, dict)]
 
     def get_weights(self, name=None):
-        """ Return a list/dict of weights
+        """ Returns a list/dict of weights
         Returns:
             If name is provided, it returns a dict of weights for models specified by keys.
             Otherwise it returns a list of all weights
@@ -98,10 +96,10 @@ class Ensemble:
             name = [name]
         assert isinstance(name, (tuple, list))
 
-        return dict((n, self.models[n].get_weights()) for n in name)
+        return {n: self.models[n].get_weights() for n in name}
 
     def set_weights(self, weights):
-        """Set weights 
+        """Sets weights 
         Args:
             weights: a dict or list of weights. If it's a dict, 
             it sets weights for models specified by the keys.
@@ -119,7 +117,7 @@ class Ensemble:
 
     @property
     def state_keys(self):
-        return None
+        return ()
 
     """ Auxiliary functions that make Ensemble like a dict """
     # def __getattr__(self, key):

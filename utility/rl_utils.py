@@ -3,11 +3,19 @@ import tensorflow as tf
 from tensorflow_probability import distributions as tfd
 
 
-def epsilon_greedy(action, epsilon, is_action_discrete, action_dim=None):
+def epsilon_greedy(action, epsilon, is_action_discrete, 
+                    action_mask=None, action_dim=None):
+    assert isinstance(epsilon, (int, float)) or epsilon.shape == () or epsilon.shape == (1,) \
+        or action.shape.ndims == epsilon.shape.ndims, (action.shape, epsilon)
     if is_action_discrete:
         assert action_dim is not None
-        rand_act = tf.random.uniform(
-            action.shape, 0, action_dim, dtype=action.dtype)
+        if action_mask is not None:
+            rand_logits = tf.where(action_mask, 
+                tf.cast(action_mask, tf.float32), -1e10)
+            rand_act = tfd.Categorical(rand_logits).sample()
+        else:
+            rand_act = tf.random.uniform(
+                action.shape, 0, action_dim, dtype=action.dtype)
         action = tf.where(
             tf.random.uniform(action.shape, 0, 1) < epsilon,
             rand_act, action)

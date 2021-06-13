@@ -69,7 +69,7 @@ agent:
 
     # arguments for PER
     per_alpha: .5
-    per_epsilon: 1e-4
+    per_epsilon: 1.e-4
 
 replay:
     replay_type: *replay

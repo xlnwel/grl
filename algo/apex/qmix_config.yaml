@@ -1,0 +1,101 @@
+---
+env:
+    name: &env_name smac2_3m
+    n_envs: &nenvs 1
+    obs_agent_id: True
+    obs_own_last_action: True
+
+model:
+    q_encoder:
+        units_list: [64]
+        activation: relu
+        layer_type: dense
+    q_rnn:
+        rnn_name: gru
+        return_sequences: True
+        return_state: True
+        units: 64
+    q:
+        units_list: []
+        activation: relu
+        layer_type: dense
+        duel: False
+    q_mixer:
+        units_list: [64]
+        hidden_dim: 32
+        activation: relu
+
+agent:
+    algorithm: &algo dqn
+    replay_type: &replay episodic
+    batch_size: &bs 32
+    n_steps: &nsteps 1      # n-step target
+    gamma: &gamma 0.99
+
+    double: True
+
+    schedule_act_eps: True
+    act_eps_type: apex
+    act_eps:
+        - [0, 1]
+        - [50000, 0.05]
+    eval_act_eps: 0
+    schedule_act_temp: False
+    n_exploit_envs: 8
+    min_temp: 1
+    max_temp: 1
+    eval_act_temp: 1
+
+    MAX_STEPS: 1e8
+    LOG_PERIOD: 100
+    N_UPDATES: 1
+    SYNC_PERIOD: 400
+    RECORD_PERIOD: False
+    N_EVALUATION: 10
+
+    # distributed algo params
+    n_learner_cpus: 1
+    n_learner_gpus: .1
+    n_workers: 10
+    n_worker_cpus: 1
+    n_worker_gpus: 0.01
+    run_mode: traj
+    worker_side_prioritization: False
+    return_stats: False
+
+    store_state: False
+    # sample_size: &ss 16 # set in train.py
+
+    # model path: root_dir/model_name/models
+    # tensorboard path: root_dir/model_name/logs
+    # the following names are just examples; they will be reset in our training process
+    root_dir: *algo                         # root path for tensorboard logs
+    model_name: *algo
+
+    loss_type: mse   # huber or mse
+    target_update_period: 200
+
+    # arguments for optimizer
+    optimizer: rmsprop
+    opt_kwargs:
+        rho: 0.99
+        epsilon: 1.e-5
+    schedule_lr: False
+    value_lr: 5e-4
+    clip_norm: 10
+
+replay:
+    replay_type: *replay
+    save: False
+    
+    # arguments for temporary buffer
+    local_buffer_type: fixed_eps
+    # memlen:   # set to be the max_episode_steps in train.py
+
+    # arguments for general replay
+    batch_size: *bs
+    # sample_size: *ss    # set to be None in train.py
+    n_steps: *nsteps
+    gamma: *gamma
+    min_episodes: 100
+    max_episodes: 5000

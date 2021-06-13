@@ -18,13 +18,7 @@ GymOutput = collections.namedtuple('GymOutput', 'obs reward discount')
 def post_wrap(env, config):
     """ Does some post processing and bookkeeping. 
     Does not change anything that will affect the agent's performance 
-        """
-    # env.is_action_discrete = isinstance(env.env.action_space, gym.spaces.Discrete)
-    # env.obs_shape = env.observation_space.shape
-    # env.action_shape = env.action_space.shape
-    # env.action_dim = env.action_space.n if env.is_action_discrete else env.action_shape[0]
-    # env.obs_dtype = env.observation_space.dtype
-    # env.action_dtype = env.action_space.dtype
+    """
     env = DataProcess(env, config.get('precision', 32))
     env = EnvStats(
         env, config.get('max_episode_steps', None), 
@@ -323,6 +317,7 @@ class FrameStack(gym.Wrapper):
 
 
 class DataProcess(gym.Wrapper):
+    """ Convert observation to np.float32 or np.float16 """
     def __init__(self, env, precision=32):
         super().__init__(env)
         self.precision = precision
@@ -360,21 +355,30 @@ class DataProcess(gym.Wrapper):
         return self.observation(obs), reward, done, info
 
 
-""" 
-Distinctions several signals:
-    done: an episode is done, may due to life loss
-    game over: a game is over, may due to timeout. Life loss is not game over
-    reset: an new episode starts after done. In auto-reset mode, environment 
-        resets when game's over. Life loss should be automatically handled by
-        the environment/previous wrapper.
+""" Subclasses of EnvStatsBase change the gym API:
+Both <reset> and <step> return EnvOutput of form
+(obs, reward, discount, reset), where discount 
+= 1 - done, and reset indicates if the environment 
+has been reset. By default, EnvStats automatically
+reset the environment when the environment is done.
+Explicitly calling EnvStats turns off auto-reset
+
+We distinguish several signals:
+    done: an episode is done, may due to life loss(Atari)
+    game over: a game is over, may due to timeout. Life 
+        loss in Atari is not game over. Do store <game_over> 
+        in <info> for multi-agent environments.
+    reset: a new episode starts after done. In auto-reset mode, 
+        environment resets when the game's over. Life loss should 
+        be automatically handled by the environment/previous wrapper.
 """
-class EnvStats(gym.Wrapper):
-    manual_reset_warning = True
+class EnvStatsBase(gym.Wrapper):
     def __init__(self, env, max_episode_steps=None, timeout_done=False, 
-            auto_reset=True, initial_state={}):
+            auto_reset=True):
         """ Records environment statistics """
         super().__init__(env)
-        self.max_episode_steps = max_episode_steps or int(1e9)
+        self.max_episode_steps = max_episode_steps \
+            or getattr(self.env, 'max_episode_steps', int(1e9))
         # if we take timeout as done
         self.timeout_done = timeout_done
         self.auto_reset = auto_reset
@@ -384,13 +388,46 @@ class EnvStats(gym.Wrapper):
         self._score = 0
         self._epslen = 0
         self._info = {}
-        self._init_state = initial_state
-        self._output = tuple()
+        self._output = None
         self.float_dtype = getattr(self.env, 'float_dtype', np.float32)
         if timeout_done:
             logger.info('Timeout is treated as done')
         self._reset()
+    
+    def reset(self):
+        raise NotImplementedError
 
+    def _reset(self):
+        obs = self.env.reset()
+        self._score = 0
+        self._epslen = 0
+        self._game_over = False
+        return obs
+
+    def score(self, **kwargs):
+        return self._info.get('score', self._score)
+
+    def epslen(self, **kwargs):
+        return self._info.get('epslen', self._epslen)
+
+    def mask(self, **kwargs):
+        return self._info.get('mask', True)
+
+    def game_over(self):
+        return self._game_over
+
+    def prev_obs(self):
+        return self._info['prev_env_output'].obs
+
+    def info(self):
+        return self._info
+        
+    def output(self):
+        return self._output
+
+
+class EnvStats(EnvStatsBase):
+    manual_reset_warning = True
     def reset(self):
         if self.auto_reset:
             self.auto_reset = False
@@ -405,10 +442,7 @@ class EnvStats(gym.Wrapper):
             return self._output
 
     def _reset(self):
-        obs = self.env.reset()
-        self._score = 0
-        self._epslen = 0
-        self._game_over = False
+        obs = super()._reset()
         reward = self.float_dtype(0)
         discount = self.float_dtype(1)
         reset = self.float_dtype(True)
@@ -429,9 +463,15 @@ class EnvStats(gym.Wrapper):
 
         assert not np.any(np.isnan(action)), action
         obs, reward, done, info = self.env.step(action, **kwargs)
-        self._score += info.get('reward', reward)
-        self._epslen += info.get('frame_skip', 1)
-        self._game_over = info.get('game_over', done)
+        if 'score' in info:
+            self._score = info['score']
+        else:
+            self._score += info.get('reward', reward)
+        if 'epslen' in info:
+            self._epslen = info['epslen']
+        else:
+            self._epslen += info.get('frame_skip', 1)
+        self._game_over = bool(info.get('game_over', done))
         if self._epslen >= self.max_episode_steps:
             self._game_over = True
             done = self.timeout_done
@@ -442,6 +482,7 @@ class EnvStats(gym.Wrapper):
         # return reset in info when resetting
         reset = self.float_dtype(info.get('reset', False))
 
+        assert isinstance(self._game_over, bool), self._game_over
         # reset env
         if self._game_over:
             info['game_over'] = self._game_over
@@ -456,30 +497,65 @@ class EnvStats(gym.Wrapper):
         self._output = EnvOutput(obs, reward, discount, reset)
         return self._output
 
-    def score(self, **kwargs):
-        return self._info.get('score', self._score)
 
-    def epslen(self, **kwargs):
-        return self._info.get('epslen', self._epslen)
+class MAEnvStats(EnvStatsBase):
+    manual_reset_warning = True
+    def reset(self):
+        if self.auto_reset:
+            self.auto_reset = False
+            if EnvStats.manual_reset_warning:
+                logger.info('Explicitly resetting turns off auto-reset. Maker sure this is done intentionally at evaluation')
+                EnvStats.manual_reset_warning = False
+        if not np.any(self._output.reset):
+            return self._reset()
+        else:
+            logger.debug('Repetitively calling reset results in no environment interaction')
+            return self._output
 
-    def mask(self, **kwargs):
-        return self._info.get('mask', True)
+    def _reset(self):
+        obs = super()._reset()
+        reward = np.zeros(self.n_agents, self.float_dtype)
+        discount = np.ones(self.n_agents, self.float_dtype)
+        reset = np.ones(self.n_agents, self.float_dtype)
+        self._output = EnvOutput(obs, reward, discount, reset)
 
-    def game_over(self):
-        return self._game_over
+        return self._output
 
-    def prev_obs(self):
-        return self._info['prev_env_output'].obs
+    def step(self, action, **kwargs):
+        if self.game_over():
+            assert self.auto_reset == False
+            # step after the game is over
+            reward = np.zeros_like(self._output.reward, self.float_dtype)
+            discount = np.zeros_like(self._output.discount, self.float_dtype)
+            reset = np.zeros_like(self._output.reset, self.float_dtype)
+            self._output = EnvOutput(self._output.obs, reward, discount, reset)
+            self._info['mask'] = np.zeros(self.n_agents, np.bool)
+            return self._output
 
-    def prev_episode(self):
-        eps = self._prev_episode
-        self._prev_episode = None
-        return eps
+        assert not np.any(np.isnan(action)), action
+        obs, reward, done, info = self.env.step(action, **kwargs)
+        # define score, epslen, and game_over in info as multi-agent environments may vary in metrics 
+        self._score = info['score']
+        self._epslen = info['epslen']
+        self._game_over = info['game_over']
+        if self._epslen >= self.max_episode_steps:
+            self._game_over = True
+            if self.timeout_done:
+                done = np.ones_like(done)
+            info['timeout'] = True
+        discount = 1-np.array(done, self.float_dtype)
+        # reset env
+        if self._game_over and self.auto_reset:
+            info['prev_env_output'] = GymOutput(obs, reward, discount)
+            # when resetting, we override the obs and reset but keep the others
+            obs, _, _, reset = self._reset()
+        else:
+            reset = np.zeros(self.n_agents, self.float_dtype)
+        self._info = info
 
-    def info(self):
-        return self._info
-        
-    def output(self):
+        self._output = EnvOutput(obs, reward, discount, reset)
+        # assert np.all(done) == info.get('game_over', False), (reset, info['game_over'])
+        # assert np.all(reset) == info.get('game_over', False), (reset, info['game_over'])
         return self._output
 
 
@@ -493,19 +569,19 @@ def get_wrapper_by_name(env, classname):
         else:
             # don't raise error here, only return None
             return None
-            
+
+
 if __name__ == '__main__':
     from env.func import create_env
     env = create_env(dict(
-        name='LunarLander-v2',
+        name='smac_3s5z',
         seed=0
     ))
-    n_act = env.action_dim
-    for i in range(500):
-        out = env.step(i % n_act)
-        print(i, out)
-        print(env.score(), env.epslen())
-        if out.reset:
+
+    for i in range(10000):
+        a = env.random_action()
+        out = env.step(a)
+        print(out[2:])
+        if np.all(out.reset):
             info = env.info()
             print(info['score'], info['epslen'])
-            break

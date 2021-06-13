@@ -60,9 +60,9 @@ def create_components(config, env):
 
     models = dict(
         encoder=Encoder(config['encoder']), 
-        value_encoder=Encoder(config['encoder'], name='value_encoder'), 
         actor=Actor(config['actor'], action_dim, is_action_discrete),
         advantage=Value(config['advantage'], name='advantage'),
+        value_encoder=Encoder(config['encoder'], name='value_encoder'), 
         value=Value(config['value']),
         aux_value=Value(config['value'], name='aux_value'),
     )

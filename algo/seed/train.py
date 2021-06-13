@@ -37,8 +37,10 @@ def main(env_config, model_config, agent_config, replay_config):
     am = pkg.import_module('actor', config=agent_config)
     fm = pkg.import_module('func', config=agent_config)
 
+    # create the monitor
     monitor = fm.create_monitor(config=agent_config)
 
+    # create workers
     Worker = am.get_worker_class()
     workers = []
     for wid in range(agent_config['n_workers']):
@@ -52,6 +54,7 @@ def main(env_config, model_config, agent_config, replay_config):
         worker.set_handler.remote(monitor=monitor)
         workers.append(worker)
 
+    # create the learner
     Learner = am.get_learner_class(Agent)
     learner = fm.create_learner(
         Learner=Learner, 
@@ -63,6 +66,7 @@ def main(env_config, model_config, agent_config, replay_config):
         replay_config=replay_config)
     learner.start_learning.remote()
 
+    # create the evaluator
     Evaluator = am.get_evaluator_class(Agent)
     evaluator = fm.create_evaluator(
         Evaluator=Evaluator,
@@ -89,9 +93,10 @@ def main(env_config, model_config, agent_config, replay_config):
         actor.start.remote(workers[aid*wpa:(aid+1)*wpa], learner, monitor)
         actors.append(actor)
     
-
     elapsed_time = 0
     interval = 10
+    # put the main thead into sleep 
+    # the monitor records training stats once in a while
     while not ray.get(monitor.is_over.remote()):
         time.sleep(interval)
         elapsed_time += interval

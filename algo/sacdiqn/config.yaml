@@ -73,11 +73,12 @@ agent:
     clip_norm: 40
     actor_lr: 5e-5
     temp_lr: 3e-4
-    opt_eps: 3.125e-4
+    opt_kwargs:
+        epsilon: 3.125e-4
     
     # arguments for PER
     per_alpha: .5
-    per_epsilon: 1e-4
+    per_epsilon: 1.e-4
 
 replay:
     replay_type: *replay

@@ -11,7 +11,8 @@ env:
 
 model:
     encoder: 
-        cnn_name: impala
+        cnn_name: procgen
+        deter_stoch: True
     actor:
         units_list: [512]
         layer_type: dense
@@ -94,12 +95,13 @@ agent:
     temp_lr: 2.5e-4
     weight_decay: null
     clip_norm: 0 
-    opt_eps: 1e-7
+    opt_kwargs:
+        epsilon: 1.e-7
     prior_lr: 1.e-3
     
     # arguments for PER
     per_alpha: .6
-    per_epsilon: 1e-4
+    per_epsilon: 1.e-4
     use_is_ratio: &is True
 
 replay:

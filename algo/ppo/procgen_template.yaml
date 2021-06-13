@@ -56,7 +56,8 @@ agent:
     schedule_lr: False
     lr: 5e-4
     clip_norm: .5
-    opt_eps: 1e-7
+    opt_kwargs:
+        epsilon: 1.e-7
     # arguments for loss
     value_loss: clip
     clip_range: .2          # clip range for ppo

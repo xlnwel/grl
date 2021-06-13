@@ -6,6 +6,8 @@ from tensorflow.keras import layers, initializers
 EVONORM_B0 = 'evonorm_b0'
 EVONORM_S0 = 'evonorm_s0'
 LAYER_TYPES = (EVONORM_B0, EVONORM_S0)
+
+
 class EvoNorm(layers.Layer):
     def __init__(self, 
                  name='evonorm',

@@ -1,4 +1,5 @@
 import functools
+import numpy as np
 
 from utility.utils import Every, TempStore
 from utility.graph import video_summary
@@ -36,13 +37,13 @@ def train(agent, env, eval_env, buffer):
 
     if step == 0 and agent.is_obs_normalized:
         print('Start to initialize running stats...')
-        for _ in range(50):
+        for _ in range(10):
             runner.run(action_selector=env.random_action, step_fn=collect)
-            agent.update_obs_rms(buffer['obs'])
+            agent.update_obs_rms(np.concatenate(buffer['obs']))
             agent.update_reward_rms(buffer['reward'], buffer['discount'])
             buffer.reset()
         buffer.clear()
-        agent.save()
+        agent.save(print_terminal_info=True)
 
     runner.step = step
     # print("Initial running stats:", *[f'{k:.4g}' for k in agent.get_running_stats() if k])
@@ -81,7 +82,6 @@ def train(agent, env, eval_env, buffer):
         with tt:
             agent.learn_log(step)
         agent.store(tps=(agent.train_step-start_train_step)/tt.last())
-        agent.update_obs_rms(buffer['obs'])
         buffer.reset()
 
         if to_eval(agent.train_step) or step > agent.MAX_STEPS:
@@ -98,11 +98,17 @@ def train(agent, env, eval_env, buffer):
 
         if to_log(agent.train_step) and agent.contains_stats('score'):
             with lt:
-                agent.store(
-                    train_step=agent.train_step,
-                    env_time=rt.total(), 
-                    train_time=tt.total(),
-                    eval_time=et.total())
+                agent.store(**{
+                    'train_step': agent.train_step,
+                    'time/run': rt.total(), 
+                    'time/train': tt.total(),
+                    'time/eval': et.total(),
+                    'time/log': lt.total(),
+                    'time/run_mean': rt.average(), 
+                    'time/train_mean': tt.average(),
+                    'time/eval_mean': et.average(),
+                    'time/log_mean': lt.average(),
+                })
                 agent.log(step)
                 agent.save()
 

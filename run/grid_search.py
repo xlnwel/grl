@@ -1,9 +1,7 @@
 import time
 import logging
-import itertools
 from copy import deepcopy
 from multiprocessing import Process
-import numpy as np
 
 from utility.utils import flatten_dict
 logger = logging.getLogger(__name__)

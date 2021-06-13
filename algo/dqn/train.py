@@ -32,46 +32,50 @@ def train(agent, env, eval_env, replay):
     tt = Timer('train')
     et = Timer('eval')
     lt = Timer('log')
-    total_time = Timer('total')
     print('Training starts...')
     while env_step <= int(agent.MAX_STEPS):
-        with total_time:
-            with rt:
-                env_step = runner.run(step_fn=collect)
-            with tt:
-                agent.learn_log(env_step)
+        with rt:
+            env_step = runner.run(step_fn=collect)
+        with tt:
+            agent.learn_log(env_step)
 
-            if to_eval(env_step):
-                with TempStore(agent.get_states, agent.reset_states):
-                    with et:
-                        record = agent.RECORD and to_record(env_step)
-                        eval_score, eval_epslen, video = evaluate(
-                            eval_env, agent, n=agent.N_EVAL_EPISODES, 
-                            record=agent.RECORD, size=(64, 64))
-                        if record:
-                            video_summary(f'{agent.name}/sim', video, step=env_step)
-                        agent.store(
-                            eval_score=eval_score, 
-                            eval_epslen=eval_epslen)
-
-            if to_log(env_step):
-                with lt:
-                    fps = rt.average() * agent.TRAIN_PERIOD
-                    tps = tt.average() * agent.N_UPDATES
-                    
+        if to_eval(env_step):
+            with TempStore(agent.get_states, agent.reset_states):
+                with et:
+                    record = agent.RECORD and to_record(env_step)
+                    eval_score, eval_epslen, video = evaluate(
+                        eval_env, agent, n=agent.N_EVAL_EPISODES, 
+                        record=agent.RECORD, size=(64, 64))
+                    if record:
+                        video_summary(f'{agent.name}/sim', video, step=env_step)
                     agent.store(
-                        env_step=agent.env_step,
-                        train_step=agent.train_step,
-                        env_time=rt.total(), 
-                        train_time=tt.total(),
-                        eval_time=et.total(),
-                        log_time=lt.total(),
-                        total_time=total_time.total(),
-                        fps=fps, 
-                        tps=tps,
-                    )
-                    agent.log(env_step)
-                    agent.save()
+                        eval_score=eval_score, 
+                        eval_epslen=eval_epslen)
+
+        if to_log(env_step):
+            with lt:
+                fps = rt.average() * agent.TRAIN_PERIOD
+                tps = tt.average() * agent.N_UPDATES
+                
+                agent.store(
+                    env_step=agent.env_step,
+                    train_step=agent.train_step,
+                    fps=fps, 
+                    tps=tps,
+                )
+                agent.store(**{
+                    'train_step': agent.train_step,
+                    'time/run': rt.total(), 
+                    'time/train': tt.total(),
+                    'time/eval': et.total(),
+                    'time/log': lt.total(),
+                    'time/run_mean': rt.average(), 
+                    'time/train_mean': tt.average(),
+                    'time/eval_mean': et.average(),
+                    'time/log_mean': lt.average(),
+                })
+                agent.log(env_step)
+                agent.save()
 
 def main(env_config, model_config, agent_config, replay_config):
     silence_tf_logs()
@@ -100,7 +104,7 @@ def main(env_config, model_config, agent_config, replay_config):
     n_workers = env_config.get('n_workers', 1)
     n_envs = env_config.get('n_envs', 1)
     replay_config['n_envs'] = n_workers * n_envs
-    if getattr(models, 'state_size', None):
+    if getattr(models, 'state_keys', ()):
         replay_config['state_keys'] = list(models.state_keys)
     replay = create_replay(replay_config)
 

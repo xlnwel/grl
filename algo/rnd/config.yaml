@@ -59,6 +59,7 @@ agent:
     pred_frac: .25  # fraction of experiences used for predictor update
 
 buffer:
+    adv_type: gae
     precision: *prec
     gamma_int: *gi
     gamma: *ge
@@ -68,4 +69,5 @@ buffer:
     n_envs: *nenvs
     N_STEPS: *nsteps
     N_MBS: *nmbs        # number of minibatches
+    norm-adv: False
     # mini-batch size = n_workers * n_envs * epslen / n_mbs

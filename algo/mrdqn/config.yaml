@@ -75,13 +75,14 @@ agent:
     schedule_lr: False
     actor_lr: 2.5e-4
     value_lr: 2.5e-4
-    opt_eps: 1e-4
+    opt_kwargs:
+        epsilon: 1.e-4
     clip_norm: 10
 
     # arguments for PER
     per_alpha: .9
     per_eta: .9
-    per_epsilon: 1e-4
+    per_epsilon: 1.e-4
 
 replay:
     replay_type: *replay

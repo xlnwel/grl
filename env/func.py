@@ -34,8 +34,6 @@ if __name__ == '__main__':
     # performance test
     config = dict(
         name='procgen_coinrun',
-        wrapper='baselines',
-        sticky_actions=True,
         frame_stack=4,
         life_done=False,
         np_obs=False,

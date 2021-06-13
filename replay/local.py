@@ -1,10 +1,14 @@
 from abc import ABC, abstractmethod
+import logging
 import collections
 import math
 import numpy as np
 
 from core.decorator import config
+from utility.utils import flatten_dict
 from replay.utils import *
+
+logger = logging.getLogger(__name__)
 
 
 class LocalBuffer(ABC):
@@ -22,12 +26,11 @@ class LocalBuffer(ABC):
         return self._replay_type
 
     def is_full(self):
-        return self._idx == self._memlen
+        return self._idx >= self._memlen
 
     @property
     def seqlen(self):
         return self._seqlen
-
 
     @abstractmethod
     def sample(self):
@@ -213,20 +216,57 @@ class EnvVecSequentialBuffer(SequentialBuffer):
         
         return results
 
-class EpisodicBuffer(LocalBuffer):
+
+class EnvEpisodicBuffer(LocalBuffer):
     def _add_attributes(self):
+        super()._add_attributes()
         self.reset()
     
     def reset(self):
         self._memory = collections.defaultdict(list)
 
     def sample(self):
-        results = {}
-        for k, v in self._memory.items():
-            results[k] = np.array(v)
+        results = {k: np.array(v) for k, v in self._memory.items()}
         self.reset()
         return results
 
     def add(self, **data):
         for k, v in data.items():
             self._memory[k].append(v)
+
+
+class EnvFixedEpisodicBuffer(EnvEpisodicBuffer):
+    def _add_attributes(self):
+        self._memlen = self._seqlen + 1
+        self.reset()
+
+    def reset(self):
+        super().reset()
+        self._idx = 0
+
+    def sample(self):
+        if self.is_full():
+            results = {k: np.array(v) for k, v in self._memory.items()}
+            for k, v in results.items():
+                assert v.shape[0] >= 60, [
+                    (kk, vv.shape) for kk, vv in results.items()
+                ]
+            self.reset()
+            return results
+        else:
+            self.reset()
+    
+    def add(self, idxes=None, flush=True, **data):
+        self._idx += 1
+        super().add(**data)
+
+
+class EnvVecFixedEpisodicBuffer(EnvFixedEpisodicBuffer):
+    def sample(self):
+        if self.is_full():
+            results = {k: np.array(v) for k, v in self._memory.items()}
+            results = flatten_dict(results)
+            self.reset()
+            return results
+        else:
+            self.reset()

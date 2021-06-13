@@ -15,11 +15,6 @@ class Agent(DQNBase, IQNOps, TempLearner):
     #     tf.summary.histogram('learn/regularization', terms['regularization'], step=self._env_step)
     #     tf.summary.histogram('learn/reward', data['reward'], step=self._env_step)
     
-    """ Call """
-    def _process_input(self, obs, evaluation, env_output):
-        obs, kwargs = super()._process_input(obs, evaluation, env_output)
-        return obs, kwargs
-
     """ SACIQN Methods"""
     @override(DQNBase)
     @tf.function

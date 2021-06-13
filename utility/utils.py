@@ -36,117 +36,6 @@ def config_attr(obj, config):
             v = int(v)
         setattr(obj, k, v)
 
-class Every:
-    def __init__(self, period, start=0):
-        self._period = period
-        self._next = start
-    
-    def __call__(self, step):
-        if step >= self._next:
-            while step >= self._next:
-                self._next += self._period
-            return True
-        return False
-
-    def step(self):
-        return self._next - self._period
-
-class RunningMeanStd:
-    # https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Parallel_algorithm
-    def __init__(self, axis, epsilon=1e-8, clip=None):
-        """ Compute running mean and std from data
-        A reimplementation of RunningMeanStd from OpenAI's baselines
-
-        Args:
-            axis: axis along which we compute mean and std from incoming data. 
-                If it's None, we only receive at a time a sample without batch dimension
-        """
-        if isinstance(axis, int):
-            axis = (axis, )
-        elif isinstance(axis, (tuple, list)):
-            axis = tuple(axis)
-        elif axis is None:
-            pass
-        else:
-            raise ValueError(f'Invalid axis({axis}) of type({type(axis)})')
-        if isinstance(axis, tuple):
-            assert axis == tuple(range(len(axis))), \
-                f'axis should only specifies leading axes so that '\
-                f'mean and var can be broadcasted automatically when normalizing. '\
-                f'but receving axis = {axis}'
-        self._axis = axis
-        if self._axis is not None:
-            self._shape_slice = np.s_[np.min(self._axis): np.max(self._axis) + 1]
-        self._mean = None
-        self._var = None
-        self._epsilon = epsilon
-        self._count = epsilon
-        self._clip = clip
-
-    @property
-    def axis(self):
-        return self._axis
-
-    def get_stats(self):
-        Stats = collections.namedtuple('RMS', 'mean var count')
-        return Stats(self._mean, self._var, self._count)
-
-    def update(self, x, mask=None):
-        x = x.astype(np.float64)
-        if self._axis is None:
-            assert mask is None, mask
-            batch_mean, batch_var, batch_count = x, np.zeros_like(x), 1
-        else:
-            batch_mean, batch_var = moments(x, self._axis, mask)
-            batch_count = np.prod(x.shape[self._shape_slice]) if mask is None else np.sum(mask)
-        if batch_count > 0:
-            self.update_from_moments(batch_mean, batch_var, batch_count)
-
-    def update_from_moments(self, batch_mean, batch_var, batch_count):
-        if self._count == self._epsilon:
-            self._mean = np.zeros_like(batch_mean, 'float64')
-            self._var = np.ones_like(batch_var, 'float64')
-
-        delta = batch_mean - self._mean
-        total_count = self._count + batch_count
-
-        new_mean = self._mean + delta * batch_count / total_count
-        # no minus one here to be consistent with np.std
-        m_a = self._var * self._count
-        m_b = batch_var * batch_count
-        M2 = m_a + m_b + delta**2 * self._count * batch_count / total_count
-        assert np.all(np.isfinite(M2)), f'M2: {M2}'
-        new_var = M2 / total_count
-
-        self._mean = new_mean
-        self._var = new_var
-        self._std = np.sqrt(self._var)
-        self._count = total_count
-        assert np.all(self._var > 0), self._var[self._var <= 0]
-
-    def normalize(self, x, zero_center=True):
-        assert not np.isinf(np.std(x)), f'{np.min(x)}\t{np.max(x)}'
-        assert self._var is not None, (self._mean, self._var, self._count)
-        if zero_center:
-            x = x - self._mean
-        x /= self._std
-        if self._clip:
-            x = np.clip(x, -self._clip, self._clip)
-        x = x.astype(np.float32)
-        return x
-
-class TempStore:
-    def __init__(self, get_fn, set_fn):
-        self._get_fn = get_fn
-        self._set_fn = set_fn
-
-    def __enter__(self):
-        self.state = self._get_fn()
-        return self
-    
-    def __exit__(self, exc_type, exc_value, traceback):
-        self._set_fn(self.state)
-
 def to_int(s):
     return int(float(s))
     
@@ -161,6 +50,15 @@ def step_str(step):
     else:
         return f'{step/1000000:.3g}m'
 
+def expand_dims_match(x, target):
+    """ Expands dimensions of x to match target,
+    an efficient way of the following process 
+        while len(x.shape) < len(target.shape):
+            x = np.expand_dims(x, -1)
+    """
+    assert x.shape == target.shape[:x.ndim], (x.shape, target.shape)
+    return x[(*[slice(None) for _ in x.shape], *(None,)*(target.ndim - x.ndim))]
+
 def moments(x, axis=None, mask=None):
     if x.dtype == np.uint8:
         x = x.astype(np.int32)
@@ -170,11 +68,12 @@ def moments(x, axis=None, mask=None):
     else:
         if axis is None:
             axis = tuple(range(x.ndim))
-        elif mask is not None:
+        else:
             axis = (axis,) if isinstance(axis, int) else tuple(axis)
+        assert mask.ndim == len(axis), (mask.shape, axis)
+        # the following process is about 5x faster than np.nan*
         # expand mask to match the dimensionality of x
-        while len(mask.shape) < len(x.shape):
-            mask = np.expand_dims(mask, -1)
+        mask = expand_dims_match(mask, x)
         # compute valid entries in x corresponding to True in mask
         n = np.sum(mask)
         for i in axis:
@@ -192,16 +91,15 @@ def moments(x, axis=None, mask=None):
 
     return x_mean, x_var
     
-def standardize(x, axis=None, epsilon=1e-8, mask=None):
+def standardize(x, mask=None, axis=None, epsilon=1e-8):
     if mask is not None:
-        while len(mask.shape) < len(x.shape):
-            mask = np.expand_dims(mask, -1)
+        mask = expand_dims_match(mask, x)
     x_mean, x_var = moments(x, axis=axis, mask=mask)
-    x_std = np.maximum(np.sqrt(x_var), epsilon)
-    x = (x - x_mean) / x_std
+    x_std = np.sqrt(x_var + epsilon)
+    y = (x - x_mean) / x_std
     if mask is not None:
-        x *= mask
-    return x
+        y = np.where(mask == 1, y, x)
+    return y
 
 def str2bool(v):
     if isinstance(v, bool):
@@ -405,3 +303,140 @@ def flatten_dict(**kwargs):
         result.append(dict(zip(k, v)))
 
     return result
+
+def batch_dicts(x, func=np.stack):
+    keys = x[0].keys()
+    vals = [o.values() for o in x]
+    vals = [func(v) for v in zip(*vals)]
+    x = {k: v for k, v in zip(keys, vals)}
+    return x
+
+
+class Every:
+    def __init__(self, period, start=0):
+        self._period = period
+        self._next = start
+    
+    def __call__(self, step):
+        if step >= self._next:
+            while step >= self._next:
+                self._next += self._period
+            return True
+        return False
+
+    def step(self):
+        return self._next - self._period
+
+class RunningMeanStd:
+    # https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Parallel_algorithm
+    def __init__(self, axis, epsilon=1e-8, clip=None, name=None, ndim=None):
+        """ Computes running mean and std from data
+        A reimplementation of RunningMeanStd from OpenAI's baselines
+
+        Args:
+            axis: axis along which we compute mean and std from incoming data. 
+                If it's None, we only receive at a time a sample without batch dimension
+            ndim: expected number of dimensions for the stats, useful for debugging
+        """
+        self.name = name
+
+        if isinstance(axis, int):
+            axis = (axis, )
+        elif isinstance(axis, (tuple, list)):
+            axis = tuple(axis)
+        elif axis is None:
+            pass
+        else:
+            raise ValueError(f'Invalid axis({axis}) of type({type(axis)})')
+
+        if isinstance(axis, tuple):
+            assert axis == tuple(range(len(axis))), \
+                f'Axis should only specifies leading axes so that '\
+                f'mean and var can be broadcasted automatically when normalizing. '\
+                f'But receving axis = {axis}'
+        self._axis = axis
+        if self._axis is not None:
+            self._shape_slice = np.s_[: max(self._axis)+1]
+        self._mean = None
+        self._var = None
+        self._epsilon = epsilon
+        self._count = epsilon
+        self._clip = clip
+        self._ndim = ndim # expected number of dimensions o
+
+    @property
+    def axis(self):
+        return self._axis
+
+    def get_stats(self):
+        Stats = collections.namedtuple('RMS', 'mean var count')
+        return Stats(self._mean, self._var, self._count)
+
+    def update(self, x, mask=None):
+        x = x.astype(np.float64)
+        if self._axis is None:
+            assert mask is None, mask
+            batch_mean, batch_var, batch_count = x, np.zeros_like(x), 1
+        else:
+            batch_mean, batch_var = moments(x, self._axis, mask)
+            batch_count = np.prod(x.shape[self._shape_slice]) \
+                if mask is None else np.sum(mask)
+        if batch_count > 0:
+            if self._ndim is not None:
+                assert batch_mean.ndim == self._ndim, (batch_mean.shape, self._ndim)
+            self.update_from_moments(batch_mean, batch_var, batch_count)
+
+    def update_from_moments(self, batch_mean, batch_var, batch_count):
+        if self._count == self._epsilon:
+            self._mean = np.zeros_like(batch_mean, 'float64')
+            self._var = np.ones_like(batch_var, 'float64')
+        assert self._mean.shape == batch_mean.shape
+        assert self._var.shape == batch_var.shape
+
+        delta = batch_mean - self._mean
+        total_count = self._count + batch_count
+
+        new_mean = self._mean + delta * batch_count / total_count
+        # no minus one here to be consistent with np.std
+        m_a = self._var * self._count
+        m_b = batch_var * batch_count
+        M2 = m_a + m_b + delta**2 * self._count * batch_count / total_count
+        assert np.all(np.isfinite(M2)), f'M2: {M2}'
+        new_var = M2 / total_count
+
+        self._mean = new_mean
+        self._var = new_var
+        self._std = np.sqrt(self._var)
+        self._count = total_count
+        assert np.all(self._var > 0), self._var[self._var <= 0]
+
+    def normalize(self, x, zero_center=True, mask=None):
+        assert not np.isinf(np.std(x)), f'{np.min(x)}\t{np.max(x)}'
+        assert self._var is not None, (self._mean, self._var, self._count)
+        assert x.ndim == self._var.ndim + (0 if self._axis is None else len(self._axis)), \
+            (x.shape, self._var.shape, self._axis)
+        if mask is not None:
+            assert mask.ndim == len(self._axis), (mask.shape, self._axis)
+            old = x.copy()
+        if zero_center:
+            x -= self._mean
+        x /= self._std
+        if self._clip:
+            x = np.clip(x, -self._clip, self._clip)
+        if mask is not None:
+            mask = expand_dims_match(mask, x)
+            x = np.where(mask, x, old)
+        x = x.astype(np.float32)
+        return x
+
+class TempStore:
+    def __init__(self, get_fn, set_fn):
+        self._get_fn = get_fn
+        self._set_fn = set_fn
+
+    def __enter__(self):
+        self.state = self._get_fn()
+        return self
+    
+    def __exit__(self, exc_type, exc_value, traceback):
+        self._set_fn(self.state)

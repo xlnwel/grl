@@ -7,9 +7,9 @@ from utility.utils import AttrDict, Every
 from utility.rl_loss import lambda_return
 from utility.tf_utils import static_scan
 from core.tf_config import build
-from core.base import AgentBase, Memory
+from core.base import AgentBase
+from core.mixin import Memory
 from core.decorator import override, step_track
-from core.optimizer import Optimizer
 from algo.dreamer.nn import RSSMState
 
 
@@ -67,18 +67,14 @@ class Agent(Memory, AgentBase):
         if hasattr(self, 'discount'):
             dynamics_models.append(self.discount)
 
-        DreamerOpt = functools.partial(
-            Optimizer,
-            name=self._optimizer, 
-            weight_decay=self._weight_decay, 
-            clip_norm=self._clip_norm,
-        )
-        self._model_opt = DreamerOpt(models=dynamics_models, lr=self._model_lr)
-        self._actor_opt = DreamerOpt(models=self.actor, lr=self._actor_lr)
-        self._value_opt = DreamerOpt(models=self.value, lr=self._value_lr)
+        self._model_opt = self._construct_opt(
+            models=dynamics_models, lr=self._model_lr)
+        self._actor_opt = self._construct_opt(
+            models=self.actor, lr=self._actor_lr)
+        self._value_opt = self._construct_opt(
+            models=self.value, lr=self._value_lr)
 
-        self._state = None
-        self._prev_action = None
+        return dynamics_models + [self.actor, self.value]
 
     @override(AgentBase)
     def _build_learn(self, env):
@@ -100,13 +96,14 @@ class Agent(Memory, AgentBase):
 
         self.learn = build(self._learn, TensorSpecs, batch_size=self._batch_size)
 
-    def _process_input(self, obs, evaluation, env_output):
-        obs, kwargs = super()._process_input(obs, evaluation, env_output)
-        obs, kwargs = self._add_memory_state_to_kwargs(obs, env_output, kwargs)
+    def _process_input(self, env_output, evaluation):
+        obs, kwargs = super()._process_input(env_output, evaluation)
+        mask = 1. - env_output.reset
+        kwargs = self._add_memory_state_to_kwargs(obs, mask, kwargs)
         return obs, kwargs
 
     def _process_output(self, obs, kwargs, out, evaluation):
-        out = self._add_tensor_memory_state_to_terms(obs, kwargs, out, evaluation)
+        out = self._add_tensors_to_terms(obs, kwargs, out, evaluation)
         if not evaluation:
             out[1]['prev_action'] = self._additional_rnn_inputs['prev_action']
         out = super()._process_output(obs, kwargs, out, evaluation)

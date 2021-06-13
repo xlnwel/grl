@@ -15,7 +15,9 @@ def create_monitor(config):
 
     return monitor
 
-def create_learner(Learner, model_fn, replay, config, model_config, env_config, replay_config):
+def create_learner(
+        Learner, model_fn, replay, config, 
+        model_config, env_config, replay_config):
     config = config.copy()
     model_config = model_config.copy()
     env_config = env_config.copy()

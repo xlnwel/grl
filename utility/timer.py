@@ -16,7 +16,7 @@ def timeit(func, *args, name=None, to_print=False, **kwargs):
 	if to_print:
 		pwc(f'{name if name else func.__name__}: '
             f'Start "{strftime("%d %b %H:%M:%S", start_time)}"', 
-            f'End "{strftime("%d %b %H:%M:%S", end_time)}"' 
+            f'End "{strftime("%d %b %H:%M:%S", end_time)}" ' 
             f'Duration "{end - start:.3g}s"', color='blue')
 
 	return end - start, result

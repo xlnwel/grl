@@ -30,6 +30,7 @@ class IMPALACNN(Module):
                  ),
                  out_activation='relu',
                  out_size=None,
+                 deter_stoch=False,
                  name='impala',
                  **kwargs):
         super().__init__(name=name)
@@ -49,7 +50,8 @@ class IMPALACNN(Module):
         self._layers = []
         prefix = f'{self.scope_name}/'
         with self.name_scope:
-            for i, f in enumerate(filters):
+            fs = filters[:-1] if deter_stoch else filters
+            for i, f in enumerate(fs):
                 if 'conv' in subsample_type:
                     subsample_kwargs['filters'] = f
 
@@ -60,6 +62,19 @@ class IMPALACNN(Module):
                     block_cls(name=name_fn(block, '_2'), **block_kwargs),
                 ]
             
+            if deter_stoch:
+                f = filters[-1]
+                subsample_kwargs['filters'] = f
+                ds_cls = block_registry.get('dsl')
+                self._ds_layer = ds_cls(
+                    n_blocks=2,
+                    subsample='conv_maxpool', 
+                    subsample_kwargs=subsample_kwargs, 
+                    block=block,
+                    block_kwargs=block_kwargs,
+                    name=f'{prefix}ds')
+                self._layers += [self._ds_layer]
+                self._training_cls.append(ds_cls)
             out_act_cls = get_activation(out_activation, return_cls=True)
             self._layers += [
                 out_act_cls(name=prefix+out_activation)
@@ -69,6 +84,7 @@ class IMPALACNN(Module):
             if self.out_size:
                 if out_activation is None:
                     self._layers.append[layers.ReLU()]
+
                 self._dense = layers.Dense(
                     self.out_size, 
                     activation=out_act_cls(), 

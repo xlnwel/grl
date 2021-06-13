@@ -2,11 +2,11 @@ import logging
 import tensorflow as tf
 
 from utility.schedule import TFPiecewiseSchedule
+from utility.utils import Every
 from utility.tf_utils import explained_variance
 from utility.rl_loss import ppo_loss
 from core.tf_config import build
-from core.optimizer import Optimizer
-from core.decorator import override, step_track
+from core.decorator import override
 from algo.ppo.base import PPOBase, collect
 
 
@@ -14,6 +14,10 @@ logger = logging.getLogger(__name__)
 
 class Agent(PPOBase):
     """ Initialization """
+    def _add_attributes(self, env, dataset):
+        super()._add_attributes(env, dataset)
+        self._to_summary_value = Every(self.LOG_PERIOD, self.LOG_PERIOD)
+        
     @override(PPOBase)
     def _construct_optimizers(self):
         if getattr(self, 'schedule_lr', False):
@@ -23,20 +27,18 @@ class Agent(PPOBase):
             self._value_lr = TFPiecewiseSchedule(self._value_lr)
 
         actor_models = [self.encoder, self.actor, self.advantage]
-        if hasattr(self, 'rnn'):
-            actor_models.append(self.rnn)
-        self._actor_opt = Optimizer(
-            self._optimizer, actor_models, self._actor_lr, 
-            clip_norm=self._clip_norm, epsilon=self._opt_eps)
+        if hasattr(self, 'actor_rnn'):
+            actor_models.append(self.actor_rnn)
+        self._actor_opt = self._construct_opt(actor_models, self._actor_lr)
 
         value_models = [self.value]
         if hasattr(self, 'value_encoder'):
             value_models.append(self.value_encoder)
         if hasattr(self, 'value_rnn'):
             value_models.append(self.value_rnn)
-        self._value_opt = Optimizer(
-            self._optimizer, value_models, self._value_lr, 
-            clip_norm=self._clip_norm, epsilon=self._opt_eps)
+        self._value_opt = self._construct_opt(value_models, self._value_lr)
+        
+        return actor_models + value_models
 
     @override(PPOBase)
     def _build_learn(self, env):
@@ -57,77 +59,13 @@ class Agent(PPOBase):
         self._value_data = ['obs', 'value', 'traj_ret']
         self.learn_value = build(self._learn_value, TensorSpecs, batch_size=self._batch_size)
 
-    def _summary_policy(self, data, terms):
+    def _summary(self, data, terms):
         pass
 
     def _summary_value(self, data, terms):
         pass
 
     """ DAAC methods """
-    @step_track
-    def learn_log(self, step):
-        for i in range(self.N_EPOCHS):
-            for j in range(1, self.N_MBS+1):
-                with self._sample_timer:
-                    data = self.dataset.sample()
-                data = {k: tf.convert_to_tensor(data[k]) for k in self._policy_data}
-                
-                with self._train_timer:
-                    terms = self.learn_policy(**data)
-                
-                terms = {f'train/{k}': v.numpy() for k, v in terms.items()}
-                self.store(**terms)
-                kl = terms.pop('train/kl')
-                if getattr(self, '_max_kl', None) and kl > self._max_kl:
-                    break
-            if getattr(self, '_max_kl', None) and kl > self._max_kl:
-                logger.info(f'{self._model_name}: Eearly stopping after '
-                    f'{i*self.N_MBS+j} update(s) due to reaching max kl.'
-                    f'Current kl={kl:.3g}')
-                break
-
-        if self._to_summary(step):
-            self._summary_policy(data, terms)
-
-        for i in range(self.N_VALUE_EPOCHS):
-            for j in range(1, self.N_MBS+1):
-                with self._sample_timer:
-                    data = self.dataset.sample()
-                data = {k: tf.convert_to_tensor(data[k]) for k in self._value_data}
-
-                with self._train_timer:
-                    terms = self.learn_value(**data)
-
-                terms = {f'train/{k}': v.numpy() for k, v in terms.items()}
-                value = terms.pop('train/value')
-                self.store(**terms, **{'train/value': value.mean()})
-                if self._value_update == 'reuse':
-                    self.dataset.update('value', value)
-            if self._value_update == 'once':
-                self.dataset.update_value_with_func(self.compute_value)
-            if self._value_update is not None:
-                last_value = self.compute_value()
-                self.dataset.finish(last_value)
-        
-        self.store(**self.dataset.sample_stats('reward'))
-        if self._to_summary(step):
-            self._summary_value(data, terms)
-
-        self.store(**{
-            'train/kl': kl,
-            'time/sample': self._sample_timer.average(),
-            'time/train': self._train_timer.average()
-        })
-
-        _, rew_rms = self.get_running_stats()
-        if rew_rms:
-            self.store(**{
-                'train/reward_rms_mean': rew_rms.mean,
-                'train/reward_rms_var': rew_rms.var
-            })
-
-        return i * self.N_MBS + j
-    
     @tf.function
     def _learn_policy(self, obs, action, advantage, logpi, state=None, mask=None):
         terms = {}
@@ -185,3 +123,52 @@ class Agent(PPOBase):
             v_clip_frac=v_clip_frac,
         ))
         return terms
+
+    def _sample_learn(self):
+        for i in range(self.N_EPOCHS):
+            for j in range(1, self.N_MBS+1):
+                with self._sample_timer:
+                    data = self.dataset.sample()
+                data = {k: tf.convert_to_tensor(data[k]) for k in self._policy_data}
+                
+                with self._learn_timer:
+                    terms = self.learn_policy(**data)
+                
+                terms = {f'train/{k}': v.numpy() for k, v in terms.items()}
+                self.store(**terms)
+                kl = terms.pop('train/kl')
+                if getattr(self, '_max_kl', None) and kl > self._max_kl:
+                    break
+            if getattr(self, '_max_kl', None) and kl > self._max_kl:
+                logger.info(f'{self._model_name}: Eearly stopping after '
+                    f'{i*self.N_MBS+j} update(s) due to reaching max kl.'
+                    f'Current kl={kl:.3g}')
+                break
+        
+        n = i * self.N_MBS + j
+        if self._to_summary(n):
+            self._summary(data, terms)
+
+        for i in range(self.N_VALUE_EPOCHS):
+            for j in range(1, self.N_MBS+1):
+                with self._sample_timer:
+                    data = self.dataset.sample()
+                data = {k: tf.convert_to_tensor(data[k]) for k in self._value_data}
+
+                terms = self.learn_value(**data)
+
+                terms = {f'train/{k}': v.numpy() for k, v in terms.items()}
+                value = terms.pop('train/value')
+                self.store(**terms, **{'train/value': value.mean()})
+                if self._value_update == 'reuse':
+                    self.dataset.update('value', value)
+            if self._value_update == 'once':
+                self.dataset.update_value_with_func(self.compute_value)
+            if self._value_update is not None:
+                last_value = self.compute_value()
+                self.dataset.finish(last_value)
+        
+        if self._to_summary_value(n):
+            self._summary_value(data, terms)
+
+        return n

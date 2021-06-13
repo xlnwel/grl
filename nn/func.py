@@ -2,11 +2,13 @@ from tensorflow.keras import layers
 
 from nn.cnn import cnn
 from nn.mlp import *
-from nn.rnn import LSTM
+from nn.rnns.lstm import MLSTM
+from nn.rnns.gru import MGRU
 from nn.dnc.dnc import DNC
 
 
 def create_encoder(config, name='encoder'):
+    config = config.copy()
     if 'cnn_name' in config:
         return cnn(**config, name=name)
     else:
@@ -17,6 +19,20 @@ Encoder = create_encoder
 
 def mlp(units_list=[], out_size=None, **kwargs):
     return MLP(units_list, out_size=out_size, **kwargs)
+
+def rnn(config, name):
+    config = config.copy()
+    rnn_name = config.pop('rnn_name')
+    if rnn_name == 'gru':
+        return layers.GRU(**config, name=name)
+    elif rnn_name == 'mgru':
+        return MGRU(config, name=name)
+    elif rnn_name == 'lstm':
+        return layers.LSTM(**config, name=name)
+    elif rnn_name == 'mlstm':
+        return MLSTM(config, name=name)
+    else:
+        raise ValueError(f'Unkown rnn: {rnn_name}')
 
 def dnc_rnn(output_size, 
             access_config=dict(memory_size=128, word_size=16, num_reads=4, num_writes=1), 

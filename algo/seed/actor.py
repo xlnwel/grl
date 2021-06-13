@@ -15,10 +15,12 @@ from core.tf_config import *
 from env.func import create_env
 from env.cls import EnvOutput
 from replay.func import create_local_buffer
-from algo.apex.actor import config_actor, get_learner_class, get_base_worker_class, get_evaluator_class
+from algo.apex.actor import config_actor, get_learner_class, \
+    get_worker_base_class, get_evaluator_class
 
 
 def get_actor_class(AgentBase):
+    """ An Actor is responsible for inference """
     class Actor(AgentBase):
         def __init__(self,
                     actor_id,
@@ -46,15 +48,20 @@ def get_actor_class(AgentBase):
             # number of workers per actor
             self._wpa = self._n_workers // self._n_actors
 
-            self._action_batch = int(self._n_workers * self._n_envvecs * self._action_frac)
-            act_eps = compute_act_eps(
-                config['act_eps_type'], 
-                config['act_eps'], 
-                None, 
-                config['n_workers'], 
-                self._n_envvecs * self._n_envs)
-            self._act_eps_mapping = act_eps.reshape(config['n_workers'], self._n_envvecs, self._n_envs)
-            # print(self.name, self._act_eps_mapping)
+            self._action_batch = int(
+                self._n_workers * self._n_envvecs * self._action_frac)
+            if 'act_eps' in config:
+                act_eps = compute_act_eps(
+                    config['act_eps_type'], 
+                    config['act_eps'], 
+                    None, 
+                    config['n_workers'], 
+                    self._n_envvecs * self._n_envs)
+                self._act_eps_mapping = act_eps.reshape(
+                    config['n_workers'], self._n_envvecs, self._n_envs)
+                print(self.name, self._act_eps_mapping)
+            else:
+                self._act_eps_mapping = None
 
             # agent's state
             if 'rnn' in self.model:
@@ -66,29 +73,35 @@ def get_actor_class(AgentBase):
             if not hasattr(self, '_pull_names'):
                 self._pull_names = [k for k in self.model.keys() if 'target' not in k]
             
-            self._to_sync = Every(self.SYNC_PERIOD)
+            self._to_sync = Every(self.SYNC_PERIOD) if getattr(self, 'SYNC_PERIOD') else None
 
-        def set_weights(self, learner):
+        def pull_weights(self, learner):
             weights = ray.get(learner.get_weights.remote(self._pull_names))
+            self.model.set_weights(weights)
+
+        def set_weights(self, weights):
             self.model.set_weights(weights)
 
         def __call__(self, wids, eids, env_output):
             if 'rnn' in self.model:
                 raw_state = [tf.concat(s, 0)
-                    for s in zip(*[tf.nest.flatten(self._state_mapping[(wid, eid)]) 
-                    for wid, eid in zip(wids, eids)])]
+                    for s in zip(*
+                    [tf.nest.flatten(self._state_mapping[(wid, eid)]) 
+                        for wid, eid in zip(wids, eids)])]
                 self._state = tf.nest.pack_sequence_as(
                     self.model.state_keys, raw_state)
-                self._prev_action = tf.concat([self._prev_action_mapping[(wid, eid)] 
+                self._prev_action = tf.concat(
+                    [self._prev_action_mapping[(wid, eid)] 
                     for wid, eid in zip(wids, eids)], 0)
                 self._prev_reward = env_output.reward
 
-            action, terms = super().__call__(env_output, False)
+            action, terms = super().__call__(env_output, evaluation=False)
 
             # store states
             if 'rnn' in self.model:
                 for wid, eid, s, a in zip(wids, eids, zip(*self.state), action):
-                    self._state_mapping[(wid, eid)] = tf.nest.pack_sequence_as(self.model.state_keys,
+                    self._state_mapping[(wid, eid)] = \
+                        tf.nest.pack_sequence_as(self.model.state_keys,
                         ([tf.reshape(x, (-1, tf.shape(x)[-1])) for x in s]))
                     self._prev_action_mapping[(wid, eid)] = a
 
@@ -96,7 +109,11 @@ def get_actor_class(AgentBase):
 
         def start(self, workers, learner, monitor):
             self._act_thread = threading.Thread(
-                target=self._act_loop, args=[workers, learner, monitor], daemon=True)
+                target=self._act_loop, 
+                args=[workers, learner, monitor], 
+                daemon=True)
+            # run the act loop in a background thread to provide the
+            # flexibility to allow the learner to push weights
             self._act_thread.start()
         
         def _act_loop(self, workers, learner, monitor):
@@ -114,8 +131,12 @@ def get_actor_class(AgentBase):
                 wids, eids = zip(*[objs.pop(i) for i in ready_objs])
                 env_output = EnvOutput(*[np.concatenate(v, axis=0) 
                     for v in zip(*ray.get(ready_objs))])
-                self._act_eps = np.reshape(self._act_eps_mapping[wids, eids], (-1))
-                assert len(wids) == len(eids) == n_ready, (len(wids), len(eids), n_ready)
+                if self._act_eps_mapping is not None:
+                    self._act_eps = np.reshape(
+                        self._act_eps_mapping[wids, eids], 
+                        (-1) if self._action_shape == () else (-1, 1))
+                assert len(wids) == len(eids) == n_ready, \
+                    (len(wids), len(eids), n_ready)
                 
                 actions, terms = self(wids, eids, env_output)
                 
@@ -126,12 +147,13 @@ def get_actor_class(AgentBase):
                 terms = [dict(v) for v in zip(*terms)]
 
                 # environment step
-                objs.update({workers[wid].env_step.remote(eid, a, t): (wid, eid)
+                objs.update({
+                    workers[wid].env_step.remote(eid, a, t): (wid, eid)
                     for wid, eid, a, t in zip(wids, eids, actions, terms)})
                 
                 self.env_step += n_ready * self._n_envs
                 if self._to_sync(self.env_step):
-                    self.set_weights(learner)
+                    self.pull_weights(learner)
                     monitor.record_run_stats.remote(**{
                         'time/wait_env': wt.average(),
                         'n_ready': n_ready
@@ -141,7 +163,8 @@ def get_actor_class(AgentBase):
 
 
 def get_worker_class():
-    WorkerBase = get_base_worker_class(object)
+    """ A Worker is only responsible for resetting&stepping environment """
+    WorkerBase = get_worker_base_class(object)
     class Worker(WorkerBase):
         def __init__(self, worker_id, config, env_config, buffer_config):
             config_attr(self, config)
@@ -150,17 +173,21 @@ def get_worker_class():
 
             self._n_envvecs = env_config.pop('n_envvecs')
             env_config.pop('n_workers', None)
-            self._envvecs = [create_env(env_config, force_envvec=True) 
+            self._envvecs = [
+                create_env(env_config, force_envvec=True) 
                 for _ in range(self._n_envvecs)]
             
-            collect_fn = pkg.import_module('agent', config=config, place=-1).collect
-            self._collect = functools.partial(collect_fn, env=None, step=None, reset=None)
+            collect_fn = pkg.import_module(
+                'agent', config=config, place=-1).collect
+            self._collect = functools.partial(
+                collect_fn, env=None, step=None, reset=None)
 
             buffer_config['force_envvec'] = True
             self._buffs = {eid: create_local_buffer(buffer_config) 
                 for eid in range(self._n_envvecs)}
 
-            self._obs = {eid: e.output().obs for eid, e in enumerate(self._envvecs)}
+            self._obs = {eid: e.output().obs 
+                for eid, e in enumerate(self._envvecs)}
             self._info = collections.defaultdict(list)
         
         def set_handler(self, **kwargs):
@@ -190,7 +217,7 @@ def get_worker_class():
                 self._info['score'] += self._envvecs[eid].score(done_env_ids)
                 self._info['epslen'] += self._envvecs[eid].epslen(done_env_ids)
                 if len(self._info['score']) > 10:
-                    self._send_episode_info(self._monitor)
+                    self._send_episodic_info(self._monitor)
 
             return env_output
     

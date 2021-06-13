@@ -2,7 +2,7 @@ import collections
 import functools
 import threading
 import time
-import psutil
+
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras.mixed_precision import global_policy
@@ -11,6 +11,7 @@ import ray
 from core.tf_config import *
 from core.module import Ensemble
 from utility.display import pwc
+from utility.tf_utils import tensor2numpy
 from utility.utils import Every, convert_dtype
 from utility.ray_setup import cpu_affinity
 from env.func import create_env
@@ -191,7 +192,7 @@ def get_actor_class(AgentBase):
                 self._prev_action[(wid, eid)] = tf.reshape(a, (-1, tf.shape(a)[-1]))
                 
             if self._store_state:
-                return action.numpy(), tf.nest.map_structure(lambda x: x.numpy(), state)
+                return tensor2numpy((action, state))
             else:
                 return action.numpy()
 

@@ -5,7 +5,8 @@ import tensorflow as tf
 from utility.tf_utils import log_softmax
 from utility.schedule import TFPiecewiseSchedule
 from core.tf_config import build
-from core.base import AgentBase, ActionScheduler, TargetNetOps
+from core.base import AgentBase
+from core.mixin import ActionScheduler, TargetNetOps
 from core.decorator import override, step_track
 
 
@@ -50,7 +51,7 @@ def collect(replay, env, env_step, reset, next_obs, **kwargs):
     replay.add(**kwargs)
 
 
-class DQNBase(TargetNetOps, AgentBase, ActionScheduler):
+class DQNBase(TargetNetOps, ActionScheduler, AgentBase):
     """ Initialization """
     @override(AgentBase)
     def _add_attributes(self, env, dataset):
@@ -58,7 +59,7 @@ class DQNBase(TargetNetOps, AgentBase, ActionScheduler):
 
         self.MUNCHAUSEN = getattr(self, 'MUNCHAUSEN', False)
         self._probabilistic_regularization = getattr(
-            self,  '_probabilistic_regularization', None)
+            self, '_probabilistic_regularization', None)
 
         self._is_per = False if dataset is None else dataset.name().endswith('per')
         self._double = getattr(self, '_double', False)
@@ -72,22 +73,28 @@ class DQNBase(TargetNetOps, AgentBase, ActionScheduler):
 
     @override(AgentBase)
     def _construct_optimizers(self):
-        if 'actor' in self.model:
-            self._actor_opt = super()._construct_opt(self.actor, lr=self._actor_lr)
-            logger.info(f'Actor model: {self.actor}')
-        value_models = [self.q]
-        if 'encoder' in self.model:
-            value_models.append(self.encoder)
-        if 'q2' in self.model:
-            value_models.append(self.q2)
+        actor_models = []
+        if [k for k in self.model.keys() if 'actor' in k]:
+            actor_models = [v for k, v in self.model.items() 
+                if 'actor' in k and 'target' not in k]
+            logger.info(f'Actor model: {actor_models}')
+            self._actor_opt = super()._construct_opt(actor_models, lr=self._actor_lr)
+
+        value_models = [v for k, v in self.model.items() \
+            if k != 'temperature' and 'actor' not in k
+            and 'target' not in k]
         logger.info(f'Value model: {value_models}')
         self._value_opt = super()._construct_opt(value_models, lr=self._value_lr)
 
+        temp_models = []
         if hasattr(self, 'temperature') and self.temperature.is_trainable():
-            self._temp_opt = super()._construct_opt(self.temperature, lr=self._temp_lr)
+            temp_models = [self.temperature]
+            logger.info(f'Temperature model: {temp_models}')
+            self._temp_opt = super()._construct_opt(temp_models, lr=self._temp_lr)
             if isinstance(getattr(self, '_target_entropy_coef', None), (list, tuple)):
                 self._target_entropy_coef = TFPiecewiseSchedule(self._target_entropy_coef)
-            logger.info(f'Temperature model: {self.temperature}')
+        
+        return actor_models + value_models + temp_models
 
     @override(AgentBase)
     def _build_learn(self, env):
@@ -106,8 +113,8 @@ class DQNBase(TargetNetOps, AgentBase, ActionScheduler):
         self.learn = build(self._learn, TensorSpecs, batch_size=self._batch_size)
 
     """ Call """
-    def _process_input(self, obs, evaluation, env_output):
-        obs, kwargs = super()._process_input(obs, evaluation, env_output)
+    def _process_input(self, env_output, evaluation):
+        obs, kwargs = super()._process_input(env_output, evaluation)
         kwargs['epsilon'] = self._get_eps(evaluation)
         kwargs['temp'] = self._get_temp(evaluation)
         return obs, kwargs
@@ -121,7 +128,7 @@ class DQNBase(TargetNetOps, AgentBase, ActionScheduler):
             if self._is_per:
                 idxes = data.pop('idxes').numpy()
 
-            with self._train_timer:
+            with self._learn_timer:
                 terms = self.learn(**data)
 
             if self._to_sync is not None:
@@ -140,8 +147,8 @@ class DQNBase(TargetNetOps, AgentBase, ActionScheduler):
             self._summary(data, terms)
         
         self.store(**{
-            'time/sample': self._sample_timer.average(),
-            'time/train': self._train_timer.average()
+            'time/sample_mean': self._sample_timer.average(),
+            'time/learn_mean': self._learn_timer.average()
         })
 
         return self.N_UPDATES

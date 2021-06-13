@@ -20,7 +20,7 @@ class Monitor(AgentImpl):
         self.last_train_step = 0
         self.MAX_STEPS = int(float(config['MAX_STEPS']))
     
-    def record_episode_info(self, worker_name=None, **stats):
+    def record_episodic_info(self, worker_name=None, **stats):
         video = stats.pop('video', None)
         if 'epslen' in stats:
             self.env_step += np.sum(stats['epslen'])
@@ -54,6 +54,7 @@ class Monitor(AgentImpl):
         self.log(self.env_step)
         self.last_train_step = train_step
         self.last_env_step = self.env_step
+        self.time = time.time()
         learner.save.remote()
     
     def is_over(self):

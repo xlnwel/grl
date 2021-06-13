@@ -1,13 +1,17 @@
+import functools
+import logging
 import numpy as np
 
 from utility.utils import config_attr
-from algo.ppo.buffer import *
+from algo.ppo.buffer import Buffer as PPOBuffer, reshape_to_sample, reshape_to_store, compute_indices
 
 
-class Replay:
-    def __init__(self, config):
+logger = logging.getLogger(__name__)
+
+class Buffer:
+    def __init__(self, config, BufferBase=PPOBuffer):
         config_attr(self, config)
-        self._buff = Buffer(config)
+        self._buff = BufferBase(config)
         self._add_attributes()
 
     def _add_attributes(self):
@@ -98,8 +102,8 @@ class Replay:
             self._shuffled_idxes, self._mb_idx, self._mb_size, self.N_SEGS)
         return {k: self._memory[k][self._curr_idxes] for k in self._aux_sample_keys}
 
-    def sample_stats(self, stats='reward'):
-        return self._buff.sample_stats(stats)
+    def compute_mean_max_std(self, stats='reward'):
+        return self._buff.compute_mean_max_std(stats)
     
     def finish(self, last_value):
         self._buff.finish(last_value)
@@ -107,13 +111,11 @@ class Replay:
     def aux_finish(self, last_value):
         assert self._idx == 0, self._idx
         self.reshape_to_store()
-        self._memory['traj_ret'], _ = \
-            compute_gae(reward=self._memory['reward'], 
-                        discount=self._memory['discount'],
-                        value=self._memory['value'],
-                        last_value=last_value,
-                        gamma=self._gamma,
-                        gae_discount=self._gae_discount)
+        _, self._memory['traj_ret'] = \
+            self._buff._compute_advantage_return(
+                self._memory['reward'], self._memory['discount'], 
+                self._memory['value'], last_value
+            )
         
         self.reshape_to_sample()
         self._ready = True

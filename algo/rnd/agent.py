@@ -2,6 +2,7 @@ import logging
 import numpy as np
 import tensorflow as tf
 
+from utility.tf_utils import tensor2numpy
 from utility.rl_loss import ppo_loss
 from core.tf_config import build
 from core.decorator import override
@@ -26,16 +27,14 @@ class Agent(PPOAgent):
 
     @override(PPOAgent)
     def _construct_optimizers(self):
-        # ac = [self.encoder, self.actor, self.value]
-        ac = self.ac
-        self._ac_opt = Optimizer(
-            self._optimizer, ac, self._ac_lr, 
-            clip_norm=self._clip_norm)
+        self._ac_opt = self._construct_opt(
+            models=self.ac, lr=self._ac_lr)
 
         # optimizer
-        self._pred_opt = Optimizer(
-            self._optimizer, self.predictor, self._pred_lr
-        )
+        self._pred_opt = self._construct_opt(
+            self.predictor, self._pred_lr)
+
+        return [self.ac, self.predictor]
 
     @override(PPOAgent)
     def _build_learn(self, env):
@@ -61,16 +60,16 @@ class Agent(PPOAgent):
 
     """ Call """
     @override(PPOAgent)
-    def _process_input(self, obs, evaluation, env_output):
+    def _process_input(self, env_output, evaluation):
         # update rms and normalize obs
         if evaluation:
-            norm_obs = np.expand_dims(obs, 1)
+            norm_obs = np.expand_dims(env_output.obs, 1)
             norm_obs = self.normalize_obs(norm_obs)
             reward_int = self.compute_int_reward(norm_obs)
             reward_int = self.normalize_int_reward(reward_int)
             self.eval_reward_int.append(np.squeeze(reward_int))
             self.eval_reward_ext.append(np.squeeze(env_output.reward))
-        return obs, {}
+        return env_output.obs, {}
 
     @override(PPOAgent)
     def _process_output(self, obs, kwargs, out, evaluation):
@@ -89,7 +88,7 @@ class Agent(PPOAgent):
     def compute_value(self, obs=None):
         obs = obs or self._last_obs
         out = self.model.compute_value(obs)
-        return tf.nest.map_structure(lambda x: x.numpy(), out)
+        return tensor2numpy(out)
 
     @step_track
     def learn_log(self, step):
@@ -134,7 +133,7 @@ class Agent(PPOAgent):
         self.store(**{
             'train/kl': kl,
             'time/sample': self._sample_timer.average(),
-            'time/train': self._train_timer.average()
+            'time/train': self._learn_timer.average()
         })
 
         _, rew_rms = self.get_running_stats()

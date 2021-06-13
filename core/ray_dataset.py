@@ -33,7 +33,7 @@ def get_dataformat(replay):
             print(f'Dataset Construction: replay size = {size}')
     data = ray.get(replay.sample.remote())
     data_format = {k: (v.shape, v.dtype) for k, v in data.items()}
-    print('data format')
+    print('Data format:')
     for k, v in data_format.items():
         print('\t', k, v)
     return data_format

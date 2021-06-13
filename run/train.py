@@ -1,11 +1,13 @@
 import os, sys
 import logging
 import time
+import collections
 import itertools
 from multiprocessing import Process
-import numpy as np
 
+Configs = collections.namedtuple('configs', 'env model agent replay')
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from utility.utils import deep_update, eval_str
 from utility.yaml_op import load_config
 from utility.display import pwc
@@ -16,6 +18,7 @@ from run.args import parse_train_args
 
 logger = logging.getLogger(__name__)
 
+
 def get_algo_name(algo):
     algo_mapping = {
         'r2d2': 'apex-mrdqn',
@@ -23,6 +26,7 @@ def get_algo_name(algo):
     if algo in algo_mapping:
         return algo_mapping[algo]
     return algo
+
 
 def get_config(algo, env):
     def search_add(word, files, filename):
@@ -48,9 +52,26 @@ def get_config(algo, env):
             filename = search_add(suffix, files, filename)
     path = f'{algo_dir}/{filename}'
     pwc(f'Config path: {path}', color='green')
-    return load_config(path)
+    
+    config = load_config(path)
+    
+    return config
+
+
+def decompose_config(config):
+    env_config = config['env']
+    model_config = config['model']
+    agent_config = config['agent']
+    replay_config = config.get('buffer') or config.get('replay')
+    configs = Configs(env_config, model_config, agent_config, replay_config)
+
+    return configs
+
 
 def change_config(kw, model_name, env_config, model_config, agent_config, replay_config):
+    """ Changes configs based on kw. model_name will
+    be modified accordingly to embody changes 
+    """
     if kw:
         for s in kw:
             key, value = s.split('=')
@@ -81,6 +102,7 @@ def change_config(kw, model_name, env_config, model_config, agent_config, replay
             
     return model_name
 
+
 def load_and_run(directory):
     # load model and log path
     config_file = None
@@ -96,13 +118,12 @@ def load_and_run(directory):
                 sys.exit()
 
     config = load_config(config_file)
-    env_config = config['env']
-    model_config = config['model']
-    agent_config = config['agent']
-    replay_config = config.get('buffer') or config.get('replay')
-    main = pkg.import_main('train', config=agent_config)
+    configs = decompose_config(config)
+    
+    main = pkg.import_main('train', config=configs.agent)
 
-    main(env_config, model_config, agent_config, replay_config)
+    main(*configs)
+
 
 if __name__ == '__main__':
     cmd_args = parse_train_args()
@@ -132,44 +153,37 @@ if __name__ == '__main__':
             else:
                 config = get_config(algo, env)
             main = pkg.import_main('train', algo)
-
-            env_config = config['env']
-            model_config = config['model']
-            agent_config = config['agent']
-            replay_config = config.get('buffer') or config.get('replay')
-            agent_config['algorithm'] = algo
+            configs = decompose_config(config)
+            configs.agent['algorithm'] = algo
             if env:
-                env_config['name'] = env
+                configs.env['name'] = env
             model_name = change_config(
-                cmd_args.kwargs, model_name, env_config, 
-                model_config, agent_config, replay_config)
-            agent_config['model_name'] = model_name
+                cmd_args.kwargs, model_name, *configs)
+            configs.agent['model_name'] = model_name
             if cmd_args.grid_search or cmd_args.trials > 1:
                 gs = GridSearch(
-                    env_config, model_config, agent_config, replay_config, 
-                    main, n_trials=cmd_args.trials, logdir=logdir, dir_prefix=prefix,
-                    separate_process=len(algo_env) > 1, delay=cmd_args.delay)
+                    *configs, main, n_trials=cmd_args.trials, 
+                    logdir=logdir, dir_prefix=prefix,
+                    separate_process=len(algo_env) > 1, 
+                    delay=cmd_args.delay)
 
                 if cmd_args.grid_search:
                     if 'sac' in algo:
-                        processes += gs(tsallis_q=[1, 1.2, 1.5])
+                        processes += gs()
                     else:
                         processes += gs()
                 else:
                     processes += gs()
             else:
                 dir_prefix = prefix + '-' if prefix else prefix
-                agent_config['root_dir'] = f'{logdir}/{dir_prefix}{env_config["name"]}/{agent_config["algorithm"]}'
-                replay_config['dir'] = agent_config['root_dir'].replace('logs', 'data')
+                configs.agent['root_dir'] = \
+                    f'{logdir}/{dir_prefix}{configs.env["name"]}/{configs.agent["algorithm"]}'
+                configs.replay['dir'] = configs.agent['root_dir'].replace('logs', 'data')
                 if len(algo_env) > 1:
-                    p = Process(target=main,
-                                args=(env_config, 
-                                    model_config,
-                                    agent_config, 
-                                    replay_config))
+                    p = Process(target=main,args=configs)
                     p.start()
                     time.sleep(1)
                     processes.append(p)
                 else:
-                    main(env_config, model_config, agent_config, replay_config)
+                    main(*configs)
     [p.join() for p in processes]

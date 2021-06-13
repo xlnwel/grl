@@ -38,7 +38,11 @@ class SequentialBase:
             self._tmp_buf.reset()
 
     def merge(self, local_buffer):
-        """ Add local_buffer to memory """
+        """ Adds local_buffer to memory 
+        Args:
+            local_buffer: either a list/tuple of dicts across multiple timesteps
+                or a dict of data at a single timestep
+        """
         if isinstance(local_buffer, (list, tuple)):
             length = len(local_buffer)
             mem_idxes = np.arange(self._mem_idx, self._mem_idx + length) % self._capacity

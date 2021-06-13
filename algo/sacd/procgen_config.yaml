@@ -81,11 +81,12 @@ agent:
     temp_lr: 2.5e-4
     weight_decay: null
     clip_norm: 0 
-    opt_eps: 1e-7
+    opt_kwargs:
+        epsilon: 1.e-7
     
     # arguments for PER
     per_alpha: .6
-    per_epsilon: 1e-4
+    per_epsilon: 1.e-4
     use_is_ratio: &is False
 
 replay:

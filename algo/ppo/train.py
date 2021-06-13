@@ -1,4 +1,7 @@
 import functools
+import signal
+import sys
+import numpy as np
 
 from core.tf_config import configure_gpu, configure_precision, silence_tf_logs
 from utility.utils import Every, TempStore
@@ -10,8 +13,6 @@ from env.func import create_env
 
 
 def train(agent, env, eval_env, buffer):
-    def collect(env, step, reset, next_obs, **kwargs):
-        buffer.add(**kwargs)
     collect_fn = pkg.import_module('agent', algo=agent.name).collect
     collect = functools.partial(collect_fn, buffer)
 
@@ -20,13 +21,14 @@ def train(agent, env, eval_env, buffer):
     
     if step == 0 and agent.is_obs_normalized:
         print('Start to initialize running stats...')
-        for _ in range(50):
+        for _ in range(10):
             runner.run(action_selector=env.random_action, step_fn=collect)
-            agent.update_obs_rms(buffer['obs'])
+            agent.update_obs_rms(np.concatenate(buffer['obs']))
             agent.update_reward_rms(buffer['reward'], buffer['discount'])
             buffer.reset()
         buffer.clear()
-        agent.save()
+        agent.env_step = runner.step
+        agent.save(print_terminal_info=True)
 
     runner.step = step
     # print("Initial running stats:", *[f'{k:.4g}' for k in agent.get_running_stats() if k])
@@ -60,7 +62,6 @@ def train(agent, env, eval_env, buffer):
         with tt:
             agent.learn_log(step)
         agent.store(tps=(agent.train_step-start_train_step)/tt.last())
-        agent.update_obs_rms(buffer['obs'])
         buffer.reset()
 
         if to_eval(agent.train_step) or step > agent.MAX_STEPS:
@@ -77,11 +78,17 @@ def train(agent, env, eval_env, buffer):
 
         if to_log(agent.train_step) and agent.contains_stats('score'):
             with lt:
-                agent.store(
-                    train_step=agent.train_step,
-                    env_time=rt.total(), 
-                    train_time=tt.total(),
-                    eval_time=et.total())
+                agent.store(**{
+                    'train_step': agent.train_step,
+                    'time/run': rt.total(), 
+                    'time/train': tt.total(),
+                    'time/eval': et.total(),
+                    'time/log': lt.total(),
+                    'time/run_mean': rt.average(), 
+                    'time/train_mean': tt.average(),
+                    'time/eval_mean': et.average(),
+                    'time/log_mean': lt.average(),
+                })
                 agent.log(step)
                 agent.save()
 
@@ -113,6 +120,13 @@ def main(env_config, model_config, agent_config, buffer_config, train=train):
             eval_env_config.pop(k)
     eval_env = create_env(eval_env_config, force_envvec=True)
 
+    def sigint_handler(sig, frame):
+        signal.signal(sig, signal.SIG_IGN)
+        env.close()
+        eval_env.close()
+        sys.exit(0)
+    signal.signal(signal.SIGINT, sigint_handler)
+
     models = create_model(model_config, env)
 
     buffer_config['n_envs'] = env.n_envs
@@ -135,4 +149,6 @@ def main(env_config, model_config, agent_config, buffer_config, train=train):
     train(agent, env, eval_env, buffer)
 
     if use_ray:
+        env.close()
+        eval_env.close()
         ray.shutdown()

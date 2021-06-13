@@ -4,7 +4,7 @@ from utility.display import pwc
 
 
 def restore(ckpt_manager, ckpt, ckpt_path, name='model'):
-    """ Restore the latest parameter recorded by ckpt_manager
+    """ Restores the latest parameter recorded by ckpt_manager
 
     Args:
         ckpt_manager: An instance of tf.train.CheckpointManager
@@ -22,7 +22,7 @@ def restore(ckpt_manager, ckpt, ckpt_path, name='model'):
     return bool(path)
 
 def save(ckpt_manager, print_terminal_info=True):
-    """ Save model
+    """ Saves model
 
     Args:
         ckpt_manager: An instance of tf.train.CheckpointManager
@@ -34,7 +34,7 @@ def save(ckpt_manager, print_terminal_info=True):
 
 def setup_checkpoint(ckpt_models, root_dir, model_name, 
         env_step, train_step):
-    """ Setup checkpoint
+    """ Setups checkpoint
 
     Args:
         ckpt_models: A dict of models to save, including optimizers

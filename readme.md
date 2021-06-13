@@ -6,7 +6,9 @@ A modulated and versatile library for deep reinforcement learning, implemented i
 
 If you want to know how an algorithm works, simply study `agent.py` and `nn.py` in each folder of [algo](https://github.com/xlnwel/d2rl/tree/master/algo).
 
-If you want to run some algorithm, refer to [Get Start](#example).
+If you want to run some algorithm, refer to [Get Start](#start).
+
+There is currently no plan on writing a detailed document. But you're welcome to open an issue whenever you have any questions/come across any mistakes, and I'll answer ASAP and add comments accordingly.
 
 ## Current Implemented Algorithms/Networks
 
@@ -59,7 +61,8 @@ All implementation details from OpenAI's baselines are implemented for PPO famil
 - [x] CBAM
 - [x] Convolutional Attention
 - [x] DNC (Differentiable Neural Computer)
-- [x] Mask LSTM
+- [x] Customized LSTM
+- [x] Customized GRU
 - [x] MobileNet Block
 - [x] Multi-Head Attention
 - [x] Randomized Network (for Generalization)
@@ -67,24 +70,30 @@ All implementation details from OpenAI's baselines are implemented for PPO famil
 - [x] SENet
 - [x] SN (Spectral Norm)
 
-## <a name="example"></a>Get Started
+## <a name="start"></a>Get Started
+
+### Training
 
 ```shell
 python run/train.py algo -e env
 ```
 
-For available `algo`, please refer to the folder names in `/algo`. To run distributed algorithms, `algo` should be of form `{distributed_architecture}-{algorithm}`. For example, if you want to run Ape-X with DQN, replace 'algo' with `apex-dqn`. Configures are set in `*config.yaml` in each fold following convention `{algo}_{env_suite}_config.yaml`, where `algo` is omitted when there is no ambiguous and `env_suite` is omitted when there is no corresponding suite name. `env` follows convention `{suite}_{name}`, current available `suite` includes `[atari, procgen, dmc]`.  
+For available `algo`, please refer to the folder names in `/algo`. To run distributed off-policy algorithms, `algo` should be of form `{distributed_architecture}-{algorithm}`. For example, if you want to run Ape-X with DQN, replace `algo` with `apex-dqn`.
+
+`env` follows convention `{suite}_{name}`, where `{suite}_` may be omitted when there is no corresponding suite name. Current available `suite` includes `[atari, procgen, dmc]`.
+
+All configurations are specified in `*config.yaml` in each fold following convention `{algo}_{env_suite}_config.yaml`, where `algo` is omitted when there is no ambiguous and `env_suite` is omitted when there is no corresponding suite name. 
 
 Examples
 
 ```shell
-python run/train.py ppo -e LunarLander-v2   # no suite specified
-python run/train.py ppo -e procgen_coinrun  # procgen suite
+python run/train.py ppo -e BipedalWalker-v3     # no suite specified
+python run/train.py ppo -e procgen_coinrun      # procgen suite
 python run/train.py iqn -e procgen_coinrun
 python run/train.py apex-iqn -e procgen_coinrun
 ```
 
-By default, all the checkpoints and loggings are saved to `./logs/{env}/{algo}/{model_name}/`.
+By default, all the checkpoints and loggings are saved in `./logs/{env}/{algo}/{model_name}/`.
 
 You can also make some simple changes to `*config.yaml` from the command line
 
@@ -92,7 +101,15 @@ You can also make some simple changes to `*config.yaml` from the command line
 # change learning rate to 0.0001, `lr` must appear in `*config.yaml`
 python run/train.py ppo -e procgen_coinrun -kw lr=0.0001
 ```
-See more examples in file `start`
+
+### Evaluation
+
+Evaluation is simple—you only need to know your checkpoint directory, which is by default of form `./logs/{env}/{algo}/{model_name}/`. For example, the following code trains and evaluates `ppo` on `BipedalWalker-v3`
+
+```shell
+python run/train.py ppo -e BipedalWalker-v3       # train
+python run/eval.py logs/BipedalWalker-v3/ppo      # eval
+````
 
 ## Acknowledge
 

@@ -108,15 +108,16 @@ class Agent(RDQNBase):
         if 'actor' in self.model:
             next_pi, next_logpi = self.target_actor.train_step(next_x)
             if self._probabilistic_regularization == 'entropy':
-                regularization = tf.reduce_sum(next_pi * next_logpi, axis=-1)
+                regularization = tf.reduce_sum(
+                    self._tau * next_pi * next_logpi, axis=-1)
         else:
             if self._probabilistic_regularization is None:
                 if self._double:    # don't suggest to use double Q here, but implement it anyway
                     online_x, _ = self._compute_embed(obs, mask, state, add_inp)
                     next_online_x = tf.split(online_x, [bis+1, ss-1], 1)
                     next_online_qs = self.q(next_online_x)
-                    next_pi = self.compute_greedy_action(next_online_qs, one_hot=True)
-                else:    
+                    next_pi = self.q.compute_greedy_action(next_online_qs, one_hot=True)
+                else:
                     next_pi = self.target_q.compute_greedy_action(next_qs, one_hot=True)
             elif self._probabilistic_regularization == 'prob':
                 next_pi = softmax(next_qs, self._tau)

@@ -32,6 +32,8 @@ class Dataset:
             logger.info('Dataset info:')
             for k, v in data_format.items():
                 logger.info(f'\t{k} {v}')
+        self.types = {k: v.dtype for k, v in self.data_format.items()}
+        self.shapes = {k: v.shape for k, v in self.data_format.items()}
         self._iterator = self._prepare_dataset(process_fn, batch_size, **kwargs)
 
     def name(self):
@@ -48,10 +50,8 @@ class Dataset:
 
     def _prepare_dataset(self, process_fn, batch_size, **kwargs):
         with tf.name_scope('data'):
-            types = {k: v.dtype for k, v in self.data_format.items()}
-            shapes = {k: v.shape for k, v in self.data_format.items()}
-
-            ds = tf.data.Dataset.from_generator(self._sample, types, shapes)
+            ds = tf.data.Dataset.from_generator(
+                self._sample, self.types, self.shapes)
             if batch_size:
                 ds = ds.batch(batch_size, drop_remainder=True)
             if process_fn:
@@ -82,7 +82,7 @@ def process_with_env(data, env, obs_range=None, one_hot_action=True, dtype=tf.fl
                 raise ValueError(obs_range)
         if env.is_action_discrete and one_hot_action:
             for k in data:
-                if 'action' in k:
+                if k.endswith('action'):
                     data[k] = tf.one_hot(data[k], env.action_dim, dtype=dtype)
     return data
 

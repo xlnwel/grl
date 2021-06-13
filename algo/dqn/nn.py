@@ -72,6 +72,7 @@ class Q(Module):
                 action = tf.one_hot(action, self.action_dim, dtype=q.dtype)
             assert_shape_compatibility([action, q])
             q = tf.reduce_sum(q * action, -1)
+        
         return q
 
     def reset_noisy(self):
@@ -86,7 +87,7 @@ class Q(Module):
             action = tf.one_hot(action, self.action_dim, dtype=qs.dtype)
         return action
     
-    def compute_runtime_action(self, qs, epsilon, temp):
+    def compute_runtime_action(self, qs, epsilon, temp=1):
         self._action_epsilon = epsilon
         if self._stoch_action:
             self._action_temp = temp

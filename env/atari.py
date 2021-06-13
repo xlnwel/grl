@@ -1,14 +1,12 @@
 import numpy as np
 import os
 os.environ.setdefault('PATH', '')
-from collections import deque
+
 import gym
 from gym.spaces.box import Box
 import cv2
 cv2.ocl.setUseOpenCL(False)
 
-from utility.display import pwc
-from env import wrappers
 
 
 def make_atari_env(config):
