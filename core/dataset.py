@@ -8,6 +8,7 @@ import tensorflow as tf
 DataFormat = collections.namedtuple('DataFormat', ('shape', 'dtype'))
 logger = logging.getLogger(__name__)
 
+
 class Dataset:
     def __init__(self, 
                  buffer, 
@@ -36,12 +37,11 @@ class Dataset:
         self.shapes = {k: v.shape for k, v in self.data_format.items()}
         self._iterator = self._prepare_dataset(process_fn, batch_size, **kwargs)
 
-    def name(self):
-        return self._buffer.name()
+    def __getattr__(self, name):
+        if name.startswith('_'):
+            raise AttributeError("attempted to get missing private attribute '{}'".format(name))
+        return getattr(self._buffer, name)
 
-    def good_to_learn(self):
-        return self._buffer.good_to_learn()
-        
     def sample(self):
         return next(self._iterator)
 
@@ -52,8 +52,10 @@ class Dataset:
         with tf.name_scope('data'):
             ds = tf.data.Dataset.from_generator(
                 self._sample, self.types, self.shapes)
+            # batch data if the data has not been batched yet
             if batch_size:
                 ds = ds.batch(batch_size, drop_remainder=True)
+            # apply processing function to a batch of data
             if process_fn:
                 ds = ds.map(map_func=process_fn, 
                             num_parallel_calls=tf.data.experimental.AUTOTUNE)

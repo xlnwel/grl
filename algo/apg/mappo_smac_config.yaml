@@ -1,0 +1,131 @@
+---
+env:
+    name: &env_name smac_3s5z_vs_3s6z
+    n_envvecs: 2
+    n_envs: &nenvs 2
+    use_state_agent: True
+    use_mustalive: True
+    add_center_xy: True
+    timeout_done: True
+    add_agent_id: False
+
+model:
+    actor_encoder: 
+        units_list: [64, 64, 64]
+        kernel_initializer: orthogonal
+        activation: relu
+        norm: layer
+        norm_after_activation: True
+        norm_kwargs:
+            epsilon: 1.e-5
+    actor_rnn:
+        rnn_name: mlstm
+        units: 64
+        kernel_initializer: orthogonal
+        use_ln: True
+    actor:
+        units_list: []
+        kernel_initializer: orthogonal
+        eval_act_temp: 1
+        attention_action: False
+        embed_dim: 32
+        out_gain: .01
+    value_encoder:
+        units_list: [64, 64, 64]
+        kernel_initializer: orthogonal
+        activation: relu
+        norm: layer
+        norm_after_activation: True
+        norm_kwargs:
+            epsilon: 1.e-5
+    value_rnn:
+        rnn_name: mlstm
+        units: 64
+        kernel_initializer: orthogonal
+        use_ln: True
+    value:
+        units_list: []
+        kernel_initializer: orthogonal
+
+agent:
+    algorithm: &algo mappo
+    precision: 32
+    gamma: &gamma .99
+
+    MAX_STEPS: 1e8
+    N_STEPS: &nsteps 400
+    N_EPOCHS: &nepochs 5
+    N_VALUE_EPOCHS: 0
+    N_MBS: &nmbs 1
+    sample_size: &ss 10       # BPTT length
+    LOG_PERIOD: 50
+    max_kl: 0            # early stop when max_kl is violated. 0 or null suggests unbound
+    n_trajs: &ntrajs 16
+
+    # distributed algo params
+    default_nice: 0
+    n_learner_cpus: 1
+    n_learner_gpus: .5
+    n_actors: 2
+    n_actor_gpus: .25
+    n_workers: 8
+    n_worker_cpus: 1
+    SYNC_PERIOD: 10000
+    has_evaluator: False
+    N_EVALUATION: 1
+    RECORD_PERIOD: 10
+
+    use_central_buffer: False
+    action_frac: .5
+
+    actor_life_mask: True
+    value_life_mask: False
+
+    obs_names: [obs, global_state]
+    normalize_obs: True
+    normalize_reward: True
+    store_state: True
+    # (once, reuse, null)
+    # "once" updates values at the end of each epoch
+    # "reuse" updates values using value from learn, which is staler than once
+    # null doesn't update values.
+    value_update: null
+
+    # model path: root_dir/model_name/models
+    # tensorboard path: root_dir/model_name/logs
+    # the following names are just examples; they will be reset in our training process
+    root_dir: *algo                         # root path for tensorboard logs
+    model_name: *algo
+    RECORD: False
+    
+    # arguments for optimizer
+    optimizer: adam
+    schedule_lr: False
+    actor_lr: 5e-4
+    value_lr: 5e-4
+    clip_norm: 10
+    opt_kwargs:
+        epsilon: 1.e-5
+    actor_weight_decay: 0
+    # arguments for loss
+    value_loss: clip
+    clip_range: .2          # clip range for ppo
+    entropy_coef: .01
+    value_coef: 1
+    huber_threshold: 10
+
+buffer:
+    use_dataset: True
+
+    adv_type: gae     # nae or gae
+    gamma: *gamma
+    lam: .95
+    n_envs: *nenvs
+    n_trajs: *ntrajs
+    N_STEPS: *nsteps
+    N_EPOCHS: *nepochs
+    N_MBS: *nmbs        # number of minibatches
+    sample_size: *ss
+    norm_adv: batch
+    sample_keys: [obs, global_state, action, value, traj_ret, advantage, logpi, mask, action_mask, life_mask, actor_h, actor_c, value_h, value_c]
+    # mini-batch size = n_workers * n_envs * epslen / n_mbs

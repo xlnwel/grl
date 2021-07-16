@@ -28,8 +28,10 @@ def post_wrap(env, config):
 
 
 class DummyEnv:
-    """ Useful to break the inheritance of unexpected attributes,
-    For example, control tasks in gym by default use frame_skip=4."""
+    """ Useful to break the inheritance of unexpected attributes.
+    For example, control tasks in gym by default use frame_skip=4,
+    but we usually don't count these frame skips in practice.
+    """
     def __init__(self, env):
         self.env = env
         self.observation_space = env.observation_space
@@ -44,6 +46,9 @@ class DummyEnv:
         self.close = env.close
         self.seed = env.seed
 
+    @property
+    def is_multiagent(self):
+        return getattr(self.env, 'is_multiagent', False)
 
 """ Wrappers from OpenAI's baselines. 
 Some modifications are done to meet specific requirements """
@@ -339,6 +344,9 @@ class DataProcess(gym.Wrapper):
     def observation(self, observation):
         if isinstance(observation, np.ndarray):
             return convert_dtype(observation, self.precision)
+        elif isinstance(observation, dict):
+            for k, v in observation.items():
+                observation[k] = convert_dtype(v, self.precision)
         return observation
     
     # def action(self, action):
@@ -361,16 +369,20 @@ Both <reset> and <step> return EnvOutput of form
 = 1 - done, and reset indicates if the environment 
 has been reset. By default, EnvStats automatically
 reset the environment when the environment is done.
-Explicitly calling EnvStats turns off auto-reset
+Explicitly calling EnvStats turns off auto-reset.
+For some environments truncated by max episode steps,
+we recommand to retrieve the last observation of an 
+episode using method "prev_obs"
 
 We distinguish several signals:
     done: an episode is done, may due to life loss(Atari)
     game over: a game is over, may due to timeout. Life 
         loss in Atari is not game over. Do store <game_over> 
         in <info> for multi-agent environments.
-    reset: a new episode starts after done. In auto-reset mode, 
-        environment resets when the game's over. Life loss should 
-        be automatically handled by the environment/previous wrapper.
+    reset: a new episode starts after done. In auto-reset 
+        mode, environment resets when the game's over. 
+        Life loss should be automatically handled by 
+        the environment/previous wrapper.
 """
 class EnvStatsBase(gym.Wrapper):
     def __init__(self, env, max_episode_steps=None, timeout_done=False, 
@@ -378,7 +390,9 @@ class EnvStatsBase(gym.Wrapper):
         """ Records environment statistics """
         super().__init__(env)
         self.max_episode_steps = max_episode_steps \
-            or getattr(self.env, 'max_episode_steps', int(1e9))
+            or getattr(self.env, 'max_episode_steps', 
+            getattr(self.env.spec, 'max_episode_steps', int(1e9)) 
+            if hasattr(self.env, 'spec') else int(1e9))
         # if we take timeout as done
         self.timeout_done = timeout_done
         self.auto_reset = auto_reset
@@ -482,6 +496,9 @@ class EnvStats(EnvStatsBase):
         # return reset in info when resetting
         reset = self.float_dtype(info.get('reset', False))
 
+        # store previous env output for later retrieval
+        info['prev_env_output'] = GymOutput(obs, reward, discount)
+
         assert isinstance(self._game_over, bool), self._game_over
         # reset env
         if self._game_over:
@@ -489,7 +506,6 @@ class EnvStats(EnvStatsBase):
             info['score'] = self._score
             info['epslen'] = self._epslen
             if self.auto_reset:
-                info['prev_env_output'] = GymOutput(obs, reward, discount)
                 # when resetting, we override the obs and reset but keep the others
                 obs, _, _, reset = self._reset()
         self._info = info
@@ -532,7 +548,7 @@ class MAEnvStats(EnvStatsBase):
             self._info['mask'] = np.zeros(self.n_agents, np.bool)
             return self._output
 
-        assert not np.any(np.isnan(action)), action
+        # assert not np.any(np.isnan(action)), action
         obs, reward, done, info = self.env.step(action, **kwargs)
         # define score, epslen, and game_over in info as multi-agent environments may vary in metrics 
         self._score = info['score']
@@ -544,9 +560,12 @@ class MAEnvStats(EnvStatsBase):
                 done = np.ones_like(done)
             info['timeout'] = True
         discount = 1-np.array(done, self.float_dtype)
+
+        # store previous env output for later retrieval
+        info['prev_env_output'] = GymOutput(obs, reward, discount)
+
         # reset env
         if self._game_over and self.auto_reset:
-            info['prev_env_output'] = GymOutput(obs, reward, discount)
             # when resetting, we override the obs and reset but keep the others
             obs, _, _, reset = self._reset()
         else:

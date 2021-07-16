@@ -1,50 +1,50 @@
 #!/bin/zsh
 
 
-# algos=(
-#     # ppo
-#     # ppo_meta
-#     ppg
-#     # apex-dqn
-#     # apex-iqn
-#     # apex-mrdqn
-#     # daac
-#     # apex-mrdqn
-#     # sacdiqn5
-# )
-# suite=procgen
-# envs=(
-#     # leaper
-#     # ninja
-#     # chaser
-#     # bigfish
-#     # plunder
-#     # coinrun
-#     # heist
-#     # starpilot
-#     # miner
-#     # climber
-#     dodgeball
-#     bigfish
-#     caveflyer 
-#     jumper
-#     fruitbot
-#     bossfight
-#     maze
-# )
-args1=(entropy)
+algos=(
+    # ppo
+    # ppo_meta
+    # ppg
+    # apex-dqn
+    # apex-iqn
+    # apex-mrdqn
+    # daac
+    # apex-mrdqn
+    # sacdiqn5
+    apg-ppo
+    apg-ppo2
+    apg-impala
+)
+suite=procgen
+envs=(
+    # leaper
+    # ninja
+    # chaser
+    # bigfish
+    # plunder
+    # heist
+    # starpilot
+    # miner
+    climber
+    dodgeball
+    caveflyer 
+    jumper
+    fruitbot
+    bossfight
+    maze
+    coinrun
+)
+args1=(8)
 args2=(True)
 args3=(1)
 
-algos=(
-    mappo
-)
-suite=smac
-envs=(
-    3s_vs_5z
-    3s5z_vs_3s6z
-    corridor
-)
+# algos=(
+#     apg-ppo
+# )
+# suite=procgen
+# envs=(
+    
+# )
 
 for e in "${envs[@]}"; do
     for a in "${algos[@]}"; do
@@ -59,7 +59,7 @@ for e in "${envs[@]}"; do
                     dir="logs/${suite}_${e}/${a}"
                     mkdir -p $dir
                     # py_script="train ${a} -e ${suite}_${e} $@ >& ${dir}/outputs.txt"
-                    py_script="train ${a} -e ${suite}_${e} -kw n_envs=4 >& ${dir}/outputs.txt"
+                    py_script="train ${a} -e ${suite}_${e} -kw distribution_mode=hard >& ${dir}/outputs.txt"
                     echo $py_script
                     eval $py_script
                     last_dir=$(ls -td ${dir}/* | grep -v txt | head -n 1)

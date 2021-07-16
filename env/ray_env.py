@@ -73,8 +73,9 @@ class RayEnvVec(EnvVecBase):
     def prev_obs(self, idxes=None):
         return self._remote_call('prev_obs', idxes)
 
-    def info(self, idxes=None):
-        return self._remote_call('info', idxes, convert_batch=False)
+    def info(self, idxes=None, convert_batch=False):
+        return self._remote_call(
+            'info', idxes, convert_batch=convert_batch)
     
     def output(self, idxes=None):
         out = self._remote_call('output', idxes, single_output=False)

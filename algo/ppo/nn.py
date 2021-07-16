@@ -31,7 +31,6 @@ class Actor(Module):
 
     def call(self, x, evaluation=False):
         actor_out = self._layers(x)
-
         if self.is_action_discrete:
             logits = actor_out / self.eval_act_temp \
                 if evaluation and self.eval_act_temp else actor_out
@@ -85,22 +84,30 @@ class PPO(Ensemble):
             **kwargs)
 
     @tf.function
-    def action(self, x, evaluation=False, **kwargs):
-        x = self.encode(x)
+    def action(self, obs, evaluation=False, return_value=True, **kwargs):
+        x = self.encode(obs)
         act_dist = self.actor(x, evaluation=evaluation)
         action = self.actor.action(act_dist, evaluation)
 
         if evaluation:
             return action
         else:
-            value = self.value(x)
             logpi = act_dist.log_prob(action)
-            terms = {'logpi': logpi, 'value': value}
+            if return_value:
+                if hasattr(self, 'value_encoder'):
+                    x = self.value_encoder(obs)
+                value = self.value(x)
+                terms = {'logpi': logpi, 'value': value}
+            else:
+                terms = {'logpi': logpi}
             return action, terms    # keep the batch dimension for later use
 
     @tf.function
     def compute_value(self, x):
-        x = self.encoder(x)
+        if hasattr(self, 'value_encoder'):
+            x = self.value_encoder(x)
+        else:
+            x = self.encoder(x)
         value = self.value(x)
         return value
 

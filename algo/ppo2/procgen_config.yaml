@@ -12,6 +12,7 @@ model:
         cnn_name: impala
         out_size: 256
     rnn:
+        rnn_name: mlstm
         units: 256
         kernel_initializer: orthogonal
         use_ln: False

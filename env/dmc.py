@@ -128,6 +128,10 @@ class DeepMindControl(gym.Env):
         return action
 
     @property
+    def is_multiagent(self):
+        return False
+
+    @property
     def observation_space(self):
         return self._observation_space
 

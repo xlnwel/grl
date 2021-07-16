@@ -3,9 +3,31 @@ import tensorflow as tf
 from utility.tf_utils import tensor2numpy
 from core.tf_config import build
 from core.decorator import override
-from core.base import Memory
-from env.wrappers import EnvOutput
+from core.mixin import Memory
 from algo.ppo.base import PPOBase, collect
+
+
+def get_data_format(*, env, batch_size, sample_size=None,
+        store_state=False, state_size=None, **kwargs):
+    obs_dtype = tf.uint8 if len(env.obs_shape) == 3 else tf.float32
+    action_dtype = tf.int32 if env.is_action_discrete else tf.float32
+    data_format = dict(
+        obs=((None, sample_size, *env.obs_shape), obs_dtype),
+        action=((None, sample_size, *env.action_shape), action_dtype),
+        value=((None, sample_size), tf.float32), 
+        traj_ret=((None, sample_size), tf.float32),
+        advantage=((None, sample_size), tf.float32),
+        logpi=((None, sample_size), tf.float32),
+        mask=((None, sample_size), tf.float32),
+    )
+    if store_state:
+        dtype = tf.keras.mixed_precision.experimental.global_policy().compute_dtype
+        data_format.update({
+            k: ((batch_size, v), dtype)
+                for k, v in state_size._asdict().items()
+        })
+    
+    return data_format
 
 
 class Agent(Memory, PPOBase):
@@ -33,9 +55,12 @@ class Agent(Memory, PPOBase):
                 for name, sz in self.model.state_size._asdict().items()])
         if self._additional_rnn_inputs:
             if 'prev_action' in self._additional_rnn_inputs:
-                TensorSpecs['prev_action'] = ((self._sample_size, *env.action_shape), env.action_dtype, 'prev_action')
+                TensorSpecs['prev_action'] = (
+                    (self._sample_size, *env.action_shape), 
+                    env.action_dtype, 'prev_action')
             if 'prev_reward' in self._additional_rnn_inputs:
-                TensorSpecs['prev_reward'] = ((self._sample_size,), self._dtype, 'prev_reward')    # this reward should be unnormlaized
+                TensorSpecs['prev_reward'] = (
+                    (self._sample_size,), self._dtype, 'prev_reward')    # this reward should be unnormlaized
         self.learn = build(self._learn, TensorSpecs)
 
     """ Call """
@@ -54,12 +79,7 @@ class Agent(Memory, PPOBase):
         return out
 
     """ PPO methods """
-    @override(PPOBase)
-    def record_last_env_output(self, env_output):
-        self._env_output = EnvOutput(
-            self.normalize_obs(env_output.obs), *env_output[1:])
-
-    @override(PPOBase)
+    # @override(PPOBase)
     def compute_value(self, obs=None, state=None, mask=None, prev_reward=None, return_state=False):
         # be sure obs is normalized if obs normalization is required
         if obs is None:

@@ -1,4 +1,3 @@
-import functools
 import numpy as np
 import tensorflow as tf
 from tensorflow_probability import distributions as tfd

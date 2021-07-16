@@ -70,6 +70,8 @@ agent:
 
 replay:
     replay_type: *replay
+    n_envs: *nenvs
+    seqlen: 0   # set to be the max_episode_steps in train.py
     save: False
     
     # arguments for temporary buffer

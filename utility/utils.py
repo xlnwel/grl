@@ -39,6 +39,14 @@ def config_attr(obj, config):
 def to_int(s):
     return int(float(s))
     
+def to_array32(x):
+    x = np.array(x, copy=False)
+    if x.dtype == np.float64:
+        x = x.astype(np.float32)
+    elif x.dtype == np.int64:
+        x = x.astype(np.int32)
+    return x
+
 def isscalar(x):
     return isinstance(x, (int, float))
     
@@ -261,7 +269,33 @@ def convert_dtype(value, precision=32, dtype=None, **kwargs):
 def flatten_dict(**kwargs):
     """ Flatten a dict of lists into a list of dicts
     For example
-    f(lr=[1, 2], a=[10,3], b=dict(c=[2, 4], d=np.arange(3)))
+    flatten_dict(lr=[1, 2], a=[10,3], b=dict(c=[2, 4], d=np.arange(1, 3)))
+    >>>
+    [{'lr': 1, 'a': 10, 'b': {'c': 2, 'd': 1}},
+    {'lr': 2, 'a': 3, 'b': {'c': 4, 'd': 2}}]
+    """
+    ks, vs = [], []
+    for k, v in kwargs.items():
+        ks.append(k)
+        if isinstance(v, dict):
+            vs.append(flatten_dict(**v))
+        elif isinstance(v, (int, float)):
+            vs.append([v])
+        else:
+            vs.append(v)
+
+    result = []
+
+    for k, v in itertools.product([ks], zip(*vs)):
+        result.append(dict(zip(k, v)))
+
+    return result
+
+def product_flatten_dict(**kwargs):
+    """ Flatten a dict of lists into a list of dicts
+    using the Cartesian product
+    For example
+    product_flatten_dict(lr=[1, 2], a=[10,3], b=dict(c=[2, 4], d=np.arange(3)))
     >>>
     [{'lr': 1, 'a': 10, 'b': {'c': 2, 'd': 0}},
     {'lr': 1, 'a': 10, 'b': {'c': 2, 'd': 1}},
@@ -292,13 +326,14 @@ def flatten_dict(**kwargs):
     for k, v in kwargs.items():
         ks.append(k)
         if isinstance(v, dict):
-            vs.append(flatten_dict(**v))
+            vs.append(product_flatten_dict(**v))
         elif isinstance(v, (int, float)):
             vs.append([v])
         else:
             vs.append(v)
 
     result = []
+
     for k, v in itertools.product([ks], itertools.product(*vs)):
         result.append(dict(zip(k, v)))
 
@@ -368,7 +403,13 @@ class RunningMeanStd:
     def axis(self):
         return self._axis
 
-    def get_stats(self):
+    def set_rms_stats(self, mean, var, count):
+        self._mean = mean
+        self._var = var
+        self._std = np.sqrt(self._var)
+        self._count = count
+
+    def get_rms_stats(self):
         Stats = collections.namedtuple('RMS', 'mean var count')
         return Stats(self._mean, self._var, self._count)
 

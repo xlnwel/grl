@@ -11,13 +11,14 @@ from utility import yaml_op
 
 logger = logging.getLogger(__name__)
 
+
 """ Logging """
-def log(logger, writer, model_name, prefix, step, print_terminal_info=True):
+def log(logger, writer, model_name, prefix, step, print_terminal_info=True, **kwargs):
     stats = dict(
         model_name=f'{model_name}',
         steps=step
     )
-    stats.update(logger.get_stats())
+    stats.update(logger.get_stats(**kwargs))
     scalar_summary(writer, stats, prefix=prefix, step=step)
     logger.log_stats(stats, print_terminal_info=print_terminal_info)
     writer.flush()
@@ -89,13 +90,17 @@ def save_code(root_dir, model_name):
     
     shutil.copytree('.', dest_dir, 
         ignore=shutil.ignore_patterns(
-            '*logs*', 'data*', '*data*' '*/data/*', '.*', '*pycache*', '*.md', '*test*'))
+            '*logs*', 'data*', '*data*' '*/data/*', 
+            '.*', '*pycache*', '*.md', '*test*',
+            '*results*'))
 
-def clear_ndarray(config):
+def simplify_datatype(config):
     """ Converts ndarray to list, useful for saving config as a yaml file """
     for k, v in config.items():
         if isinstance(v, dict):
-            config[k] = clear_ndarray(v)
+            config[k] = simplify_datatype(v)
+        elif isinstance(v, tuple):
+            config[k] = list(v)
         elif isinstance(v, np.ndarray):
             config[k] = v.tolist()
         else:
@@ -103,7 +108,7 @@ def clear_ndarray(config):
     return config
 
 def save_config(root_dir, model_name, config):
-    config = clear_ndarray(config)
+    config = simplify_datatype(config)
     yaml_op.save_config(config, filename=f'{root_dir}/{model_name}/config.yaml')
 
 """ Functions for setup logging """                
@@ -172,7 +177,9 @@ class Logger:
         for k, v in kwargs.items():
             if isinstance(v, tf.Tensor):
                 v = v.numpy()
-            if isinstance(v, (list, tuple)):
+            if v is None:
+                return
+            elif isinstance(v, (list, tuple)):
                 self._store_dict[k] += list(v)
             else:
                 self._store_dict[k].append(v)
@@ -194,13 +201,13 @@ class Logger:
             stats[key] = v
             return
         if mean:
-            stats[f'{key}'] = np.mean(v)
+            stats[f'{key}'] = np.mean(v).astype(np.float32)
         if std:
-            stats[f'{key}_std'] = np.std(v)
+            stats[f'{key}_std'] = np.std(v).astype(np.float32)
         if min:
-            stats[f'{key}_min'] = np.min(v)
+            stats[f'{key}_min'] = np.min(v).astype(np.float32)
         if max:
-            stats[f'{key}_max'] = np.max(v)
+            stats[f'{key}_max'] = np.max(v).astype(np.float32)
         del self._store_dict[key]
         return stats
 
@@ -217,13 +224,13 @@ class Logger:
                 stats[k] = v
                 continue
             if mean:
-                stats[f'{k}'] = np.mean(v)
+                stats[f'{k}'] = np.mean(v).astype(np.float32)
             if std:
-                stats[f'{k}_std'] = np.std(v)
+                stats[f'{k}_std'] = np.std(v).astype(np.float32)
             if min:
-                stats[f'{k}_min'] = np.min(v)
+                stats[f'{k}_min'] = np.min(v).astype(np.float32)
             if max:
-                stats[f'{k}_max'] = np.max(v)
+                stats[f'{k}_max'] = np.max(v).astype(np.float32)
         self._store_dict.clear()
         return stats
 

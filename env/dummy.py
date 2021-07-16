@@ -3,6 +3,10 @@ import gym
 
 
 class DummyEnv():
+    """ Wrapper for built-in gym environments to 
+    hide unexpected attributes. 
+    Single agent is assumed.
+    """
     def __init__(self, obs_shape=(4,), action_dim=3, is_action_discrete=True, **kwargs):
         self.count = 0
         self.observation_space = gym.spaces.Box(high=float('inf'), low=0, shape=obs_shape)
@@ -29,3 +33,7 @@ class DummyEnv():
     
     def _reset_done_interval(self):
         self.done_interval = np.random.randint(10, 1000)
+
+    @property
+    def is_multiagent(self):
+        return False

@@ -61,6 +61,7 @@ agent:
     run_mode: nsteps
     worker_side_prioritization: False
     return_stats: False
+    has_evaluator: False
 
     # model path: root_dir/model_name/models
     # tensorboard path: root_dir/model_name/logs

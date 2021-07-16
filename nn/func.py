@@ -20,7 +20,7 @@ Encoder = create_encoder
 def mlp(units_list=[], out_size=None, **kwargs):
     return MLP(units_list, out_size=out_size, **kwargs)
 
-def rnn(config, name):
+def rnn(config, name='rnn'):
     config = config.copy()
     rnn_name = config.pop('rnn_name')
     if rnn_name == 'gru':

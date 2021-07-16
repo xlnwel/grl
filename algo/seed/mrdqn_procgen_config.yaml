@@ -1,6 +1,6 @@
 ---
 env:
-    name: procgen_coinrun
+    name: procgen_starpilot
     distribution_mode: easy
     n_envvecs: 4
     n_envs: &ne 4
@@ -21,24 +21,37 @@ model:
         kernel_initializer: glorot_uniform
         activation: relu
         duel: False
-    additional_rnn_input: False
+        stoch_action: True
+        tau: &tau 0.01
 
 agent:
     algorithm: &algo seed-mrdqn
     replay_type: &replay seq
-    gamma: &gamma .99
+    gamma: .99
     lambda: .95
     batch_size: &bs 32
     precision: 32
+
+    MUNCHAUSEN: False   # whether to use munchausen rl target
+    probabilistic_regularization: null
+
+    tau: *tau
+    alpha: .9
+    clip_logpi_min: -1
 
     schedule_act_eps: True
     act_eps_type: apex
     act_eps: .3
     eval_act_eps: 0
+    schedule_act_temp: False
+    n_exploit_envs: 8
+    min_temp: .5
+    max_temp: 10
+    eval_act_temp: .5
     
     store_state: False
     burn_in: False
-    sample_size: &ss 32
+    sample_size: &ss 16
     burn_in_size: &bis 0
 
     MAX_STEPS: 2.5e7      # maximum env steps
@@ -49,15 +62,15 @@ agent:
     N_EVALUATION: 10
 
     # distributed algo params
-    n_learner_cpus: 2
+    n_learner_cpus: 1
     n_learner_gpus: .3
     n_actors: 2
-    n_actor_gpus: .1
-    n_workers: 5
+    n_actor_gpus: .25
+    n_workers: 6
     n_worker_cpus: 1
-    n_worker_gpus: 0
     run_mode: nsteps
     worker_side_prioritization: False
+    has_evaluator: False
     return_stats: False
 
     action_frac: .25
@@ -72,10 +85,15 @@ agent:
     target_update_period: 1500
     tbo: False
 
+    loo_c: 1.
+    v_pi_coef: 1.
+    reinforce_coef: 1.
+    tau: *tau
     # arguments for optimizer
     optimizer: adam
     schedule_lr: False
-    lr: 2.5e-4
+    actor_lr: 2.5e-4
+    value_lr: 2.5e-4
     opt_kwargs:
         epsilon: 1.e-7
     
@@ -100,6 +118,6 @@ replay:
     sample_size: *ss
     burn_in_size: *bis
     min_size: 100
-    capacity: 10000
+    capacity: 30000
     state_keys: ['h', 'c']
     extra_keys: ['obs', 'action', 'mu', 'mask']

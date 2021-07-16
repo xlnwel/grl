@@ -35,7 +35,7 @@ class Runner:
         self._frame_skip = getattr(env, 'frame_skip', 1)
         self._frames_per_step = self.env.n_envs * self._frame_skip
         self._default_nsteps = nsteps or env.max_episode_steps // self._frame_skip
-        
+
         record_envs = record_envs or self.env.n_envs
         self._record_envs = list(range(record_envs))
 
@@ -70,12 +70,12 @@ class Runner:
             
             # logging when any env is reset 
             done_env_ids = [i for i, r in enumerate(reset)
-                if (np.all(r) if isinstance(r, np.ndarray) else r)]
+                if (np.all(r) if isinstance(r, np.ndarray) else r) 
+                and i in self._record_envs]
             if done_env_ids:
                 info = self.env.info(done_env_ids)
                 # further filter done caused by life loss
-                done_env_ids = [k for k, i in enumerate(info) if i.get('game_over')]
-                info = [info[i] for i in done_env_ids if i in self._record_envs]
+                info = [i for i in info if i.get('game_over')]
                 if info:
                     self.store_info(info)
                 self.episodes[done_env_ids] += 1
@@ -100,13 +100,12 @@ class Runner:
         return self.step
 
     def _run_traj_envvec(self, action_selector=None, step_fn=None):
-        # TODO: make it work
         action_selector = action_selector or self.agent
         obs = self.env_output.obs
         
         for t in range(self._default_nsteps):
             action = action_selector(self.env_output, evaluation=False)
-            obs, reset = self.step_env(obs, action, step_fn, mask=True)
+            obs, reset = self.step_env(obs, action, step_fn)
 
             # logging when any env is reset 
             if np.all(reset):
@@ -118,7 +117,7 @@ class Runner:
 
         return self.step
 
-    def step_env(self, obs, action, step_fn, mask=False):
+    def step_env(self, obs, action, step_fn):
         if isinstance(action, tuple):
             if len(action) == 2:
                 action, terms = action
@@ -140,8 +139,6 @@ class Runner:
         if step_fn:
             kwargs = dict(obs=obs, action=action, reward=reward,
                 discount=discount, next_obs=next_obs)
-            if mask:
-                kwargs['mask'] = self.env.mask()
             assert 'reward' not in terms, 'reward in terms is from the preivous timestep and should not be used to override here'
             # allow terms to overwrite the values in kwargs
             kwargs.update(terms)
@@ -172,8 +169,7 @@ def evaluate(env,
     scores = []
     epslens = []
     max_steps = env.max_episode_steps // getattr(env, 'frame_skip', 1)
-    maxlen = min(video_len, max_steps)
-    frames = [collections.deque(maxlen=maxlen) 
+    frames = [collections.deque(maxlen=video_len) 
         for _ in range(min(n_windows, env.n_envs))]
     if hasattr(agent, 'reset_states'):
         agent.reset_states()
@@ -244,8 +240,13 @@ def evaluate(env,
                         n_run_eps += len(reset_env_ids)
                         eo = env.reset(reset_env_ids)
                         for t, s in zip(env_output, eo):
-                            for i, ri in enumerate(reset_env_ids):
-                                t[ri] = s[i]
+                            if isinstance(t, dict):
+                                for k in t.keys():
+                                    for i, ri in enumerate(reset_env_ids):
+                                        t[k][ri] = s[k][i]
+                            else:
+                                for i, ri in enumerate(reset_env_ids):
+                                    t[ri] = s[i]
                     elif n_done_eps == n:
                         break
                 prev_done = done

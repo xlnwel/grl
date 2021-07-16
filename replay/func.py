@@ -18,6 +18,11 @@ def create_local_buffer(config):
     config = config.copy()
 
     if config.get('local_buffer_type', None) is not None:
+        buffer_name = config.pop('local_buffer_type')
+        # use the vectorized buffer if n_envs > 1
+        if config.get('n_envs', 1) > 1 and not buffer_name.startswith('vec_'):
+            buffer_name = 'vec_' + buffer_name
+
         buffer_type = {
             'nstep': EnvNStepBuffer,
             'vec_nstep': EnvVecNStepBuffer,
@@ -25,7 +30,7 @@ def create_local_buffer(config):
             'vec_seq': EnvVecSequentialBuffer,
             'fixed_eps': EnvFixedEpisodicBuffer,
             'vec_fixed_eps': EnvVecFixedEpisodicBuffer,
-        }[config.pop('local_buffer_type')]
+        }[buffer_name]
 
         return buffer_type(config)
     else:

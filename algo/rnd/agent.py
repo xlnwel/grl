@@ -136,7 +136,7 @@ class Agent(PPOAgent):
             'time/train': self._learn_timer.average()
         })
 
-        _, rew_rms = self.get_running_stats()
+        _, rew_rms = self.get_rms_stats()
         if rew_rms:
             self.store(**{
                 'train/reward_int_rms_mean': rew_rms.mean,
@@ -250,5 +250,5 @@ class Agent(PPOAgent):
         return action
 
     @override(PPOAgent)
-    def get_running_stats(self):
-        return self.rnd.get_running_stats()
+    def get_rms_stats(self):
+        return self.rnd.get_rms_stats()

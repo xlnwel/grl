@@ -249,21 +249,6 @@ class SMAC(gym.Env):
         self.add_center_xy = add_center_xy
         self.use_stacked_frames = use_stacked_frames
         self.stacked_frames = stacked_frames
-        # print(self.name)
-        # print(self.add_local_obs)
-        # print(self.add_move_state)
-        # print(self.add_visible_state)
-        # print(self.add_distance_state)
-        # print(self.add_xy_state)
-        # print(self.add_enemy_action_state)
-        # print(self.add_agent_id)
-        # print(self.use_state_agent)
-        # print(self.use_mustalive)
-        # print(self.add_center_xy)
-        # print(self.use_stacked_frames)
-        # print(self.stacked_frames)
-        # import sys
-        # sys.exit()
 
         map_params = get_map_params(self.name)
         self.n_agents = map_params["n_agents"]
@@ -380,6 +365,10 @@ class SMAC(gym.Env):
             self.stacked_local_obs = np.zeros((self.n_agents, self.stacked_frames, int(self.get_obs_size()[0]/self.stacked_frames)), dtype=np.float32)
             self.stacked_global_state = np.zeros((self.n_agents, self.stacked_frames, int(self.get_state_size()[0]/self.stacked_frames)), dtype=np.float32)
 
+        # some properties for multi-agent environments
+        self.use_life_mask = True
+        self.use_action_mask = True
+
     def random_action(self):
         actions = []
         for avail_actions in self.get_avail_actions():
@@ -387,6 +376,10 @@ class SMAC(gym.Env):
             actions.append(random.choice(choices))
             
         return np.stack(actions)
+
+    @property
+    def is_multiagent(self):
+        return True
 
     @property
     def action_space(self):
@@ -1283,14 +1276,14 @@ class SMAC(gym.Env):
         if self.obs_timestep_number:
             agent_obs = np.append(agent_obs, self._episode_steps / self.max_episode_steps)
 
-        # if self.debug:
-        #     print("Obs Agent: {}".format(agent_id).center(60, "-"))
-        #     print("Avail. actions {}".format(
-        #         self.get_avail_agent_actions(agent_id)))
-        #     print("Move feats {}".format(move_feats))
-        #     print("Enemy feats {}".format(enemy_feats))
-        #     print("Ally feats {}".format(ally_feats))
-        #     print("Own feats {}".format(own_feats))
+        if self.debug:
+            print("Obs Agent: {}".format(agent_id).center(60, "-"))
+            print("Avail. actions {}".format(
+                self.get_avail_agent_actions(agent_id)))
+            print("Move feats {}".format(move_feats))
+            print("Enemy feats {}".format(enemy_feats))
+            print("Ally feats {}".format(ally_feats))
+            print("Own feats {}".format(own_feats))
 
         return agent_obs
 

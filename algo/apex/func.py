@@ -8,6 +8,33 @@ from algo.apex.monitor import Monitor
 logger = logging.getLogger(__name__)
 
 
+def disable_info_logging(config, 
+        display_var=False, save_code=False,
+        logger=False, writer=False):
+    config['display_var'] = display_var
+    config['save_code'] = save_code
+    config['logger'] = logger
+    config['writer'] = writer
+
+    return config
+
+def ray_remote_config(config, name, 
+        default_cpus=None, default_gpus=None):
+    ray_config = {}
+    if config.setdefault(f'n_{name}_cpus', default_cpus):
+        ray_config['num_cpus'] = config[f'n_{name}_cpus']
+    if name.lower() == 'learner':
+        # for learner, we set the default number of gpus 
+        # to the maximum number of gpus available if 
+        # default_gpus is not specified
+        n_gpus = config.setdefault(f'n_{name}_gpus', 
+            default_gpus or len(tf.config.list_physical_devices('GPU')))
+    else:
+        n_gpus = config.setdefault(f'n_{name}_gpus', default_gpus)
+    if n_gpus:
+        ray_config['num_gpus'] = n_gpus
+    return ray_config
+
 def create_monitor(config):
     config = config.copy()
     RayMonitor = ray.remote(Monitor)
@@ -23,16 +50,13 @@ def create_learner(
     env_config = env_config.copy()
     replay_config = replay_config.copy()
     
-    n_cpus = config.setdefault('n_learner_cpus', 3)
-    config['writer'] = False
-    config['logger'] = False
+    config = disable_info_logging(config, display_var=True)
+    # avoids additional workers created by RayEnvVec
+    env_config['n_workers'] = 1
 
-    if tf.config.list_physical_devices('GPU'):
-        n_gpus = config.setdefault('n_learner_gpus', 1)
-        RayLearner = ray.remote(num_cpus=n_cpus, num_gpus=n_gpus)(Learner)
-    else:
-        RayLearner = ray.remote(num_cpus=n_cpus)(Learner)
-
+    ray_config = ray_remote_config(config, 'learner')
+    RayLearner = ray.remote(**ray_config)(Learner) \
+        if ray_config else ray.remote(Learner)
     learner = RayLearner.remote( 
         model_fn=model_fn, 
         replay=replay,
@@ -59,25 +83,24 @@ def create_worker(
     env_config = env_config.copy()
     buffer_config = buffer_config.copy()
 
+    config = disable_info_logging(config)
+
     buffer_fn = create_local_buffer
 
     if 'seed' in env_config:
         env_config['seed'] += worker_id * 100
-    
-    config['display_var'] = False
-    config['save_code'] = False
-    config['logger'] = False
-    config['writer'] = False
+    # avoids additional workers created by RayEnvVec
+    env_config['n_workers'] = 1
 
-    n_cpus = config.get('n_worker_cpus', 1)
-    n_gpus = config.get('n_worker_gpus', 0)
-    RayWorker = ray.remote(num_cpus=n_cpus, num_gpus=n_gpus)(Worker)
+    ray_config = ray_remote_config(config, 'worker')
+    RayWorker = ray.remote(**ray_config)(Worker) \
+        if ray_config else ray.remote(Worker)
     worker = RayWorker.remote(
         worker_id=worker_id, 
         config=config, 
         model_config=model_config, 
         env_config=env_config, 
-        buffer_config=buffer_config,
+        buffer_config=buffer_config, 
         model_fn=model_fn, 
         buffer_fn=buffer_fn)
 
@@ -88,10 +111,7 @@ def create_evaluator(Evaluator, model_fn, config, model_config, env_config):
     model_config = model_config.copy()
     env_config = env_config.copy()
 
-    config['display_var'] = False
-    config['save_code'] = False
-    config['logger'] = False
-    config['writer'] = False
+    config = disable_info_logging(config)
 
     config['schedule_act_eps'] = False
     config['schedule_act_temp'] = False
@@ -99,7 +119,7 @@ def create_evaluator(Evaluator, model_fn, config, model_config, env_config):
     if 'seed' in env_config:
         env_config['seed'] += 999
     env_config['n_workers'] = 1
-    env_config['n_envs'] = 4 if 'procgen' in env_config['name'] else 1
+    env_config['n_envs'] = env_config.pop('n_eval_envs', 4)
 
     RayEvaluator = ray.remote(num_cpus=1)(Evaluator)
     evaluator = RayEvaluator.remote(

@@ -1,7 +1,7 @@
-import tensorflow as tf
 import ray
 
-from algo.apex.func import create_learner, create_monitor, create_evaluator
+from algo.apex.func import disable_info_logging, ray_remote_config, \
+    create_learner, create_monitor, create_evaluator
 
 
 def create_worker(
@@ -11,15 +11,16 @@ def create_worker(
     env_config = env_config.copy()
     buffer_config = buffer_config.copy()
 
+    config = disable_info_logging(config)
+
     if 'seed' in env_config:
         env_config['seed'] += worker_id * 100
-    
-    config['display_var'] = False
-    config['save_code'] = False
-    config['logger'] = False
-    config['writer'] = False
+    # avoids additional workers created by RayEnvVec
+    env_config['n_workers'] = 1
 
-    RayWorker = ray.remote(num_cpus=1)(Worker)
+    ray_config = ray_remote_config(config, 'worker', default_cpus=1)
+    RayWorker = ray.remote(**ray_config)(Worker) \
+        if ray_config else ray.remote(Worker)
     worker = RayWorker.remote(
         worker_id=worker_id, 
         config=config, 
@@ -33,17 +34,11 @@ def create_actor(Actor, actor_id, model_fn, config, model_config, env_config):
     model_config = model_config.copy()
     env_config = env_config.copy()
 
-    config['display_var'] = False
-    config['save_code'] = False
-    config['logger'] = False
-    config['writer'] = False
+    config = disable_info_logging(config)
 
-    if tf.config.list_physical_devices('GPU'):
-        n_gpus = config.setdefault('n_actor_gpus', .1)
-        RayActor = ray.remote(num_cpus=1, num_gpus=n_gpus)(Actor)
-    else:
-        RayActor = ray.remote(num_cpus=2)(Actor)
-
+    ray_config = ray_remote_config(config, 'actor')
+    RayActor = ray.remote(**ray_config)(Actor) \
+        if ray_config else ray.remote(Actor)
     actor = RayActor.remote(
         actor_id=actor_id,
         model_fn=model_fn, 

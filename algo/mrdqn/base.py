@@ -35,7 +35,7 @@ def get_data_format(*, env, replay_config, agent_config,
 
     return data_format
 
-def collect(replay, env, step, reset, next_obs, **kwargs):
+def collect(replay, env, env_step, reset, next_obs, **kwargs):
     replay.add(**kwargs)
 
 

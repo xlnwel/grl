@@ -46,8 +46,6 @@ agent:
     LOG_PERIOD: &log 100
     N_UPDATES: *log
     SYNC_PERIOD: 1000
-    RECORD_PERIOD: 10
-    N_EVALUATION: 1
 
     # distributed algo params
     n_learner_cpus: 1
@@ -57,6 +55,10 @@ agent:
     n_worker_gpus: .1
     run_mode: nsteps
     worker_side_prioritization: False
+    # SYNC_PERIOD: 50
+    has_evaluator: True
+    N_EVALUATION: 1
+    RECORD_PERIOD: 10
 
     # IQN params
     N: 32                # N in paper, num of quantiles for online quantile network

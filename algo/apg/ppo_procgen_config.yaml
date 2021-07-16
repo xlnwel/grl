@@ -1,0 +1,99 @@
+---
+env:
+    name: &env_name procgen_coinrun
+    n_envvecs: 2
+    n_envs: &nenvs 16
+    frame_skip: 1
+    frame_stack: 1
+    # num_levels: 200
+    distribution_mode: easy
+
+model:
+    encoder: 
+        cnn_name: impala
+        out_size: 256
+    actor:
+        units_list: []
+        norm: null
+        kernel_initializer: orthogonal
+        activation: relu
+        eval_act_temp: 1
+    value:
+        units_list: []
+        norm: null
+        kernel_initializer: orthogonal
+        activation: relu
+
+agent:
+    algorithm: &algo apg-ppo
+    precision: 16
+    gamma: &gamma .999
+
+    MAX_STEPS: 2e8
+    N_STEPS: &nsteps 32
+    N_EPOCHS: &nepochs 1
+    N_MBS: &nmbs 1
+    LOG_PERIOD: 50
+    EVAL_PERIOD: 100
+    max_kl: 0            # early stop when max_kl is violated. 0 or null suggests unbound
+    n_trajs: &ntrajs 256
+
+    # distributed algo params
+    default_nice: 0
+    n_learner_cpus: 1
+    n_learner_gpus: .5
+    n_actors: 2
+    n_actor_gpus: .25
+    n_workers: 8
+    n_worker_cpus: 1
+    SYNC_PERIOD: 10000
+    has_evaluator: True
+    N_EVALUATION: 1
+    RECORD_PERIOD: 10
+
+    use_central_buffer: False
+    action_frac: .5
+
+    normalize_obs: False
+    normalize_reward: True
+    # (once, reuse, null)
+    # "once" updates values at the end of each epoch
+    # "reuse" updates values using value from learn, which is staler than once
+    # null doesn't update values.
+    value_update: null
+
+    # model path: root_dir/model_name/models
+    # tensorboard path: root_dir/model_name/logs
+    # the following names are just examples; they will be reset in our training process
+    root_dir: *algo                         # root path for tensorboard logs
+    model_name: *algo
+    RECORD: True
+
+    # arguments for optimizer
+    optimizer: adam
+    schedule_lr: False
+    lr: 5e-4
+    clip_norm: .5
+    opt_kwargs:
+        epsilon: 1.e-5
+    # arguments for loss
+    value_loss: clip
+    clip_range: .2          # clip range for ppo
+    entropy_coef: .01
+    value_coef: .5
+
+buffer:
+    use_dataset: True
+
+    # APPO buffer
+    adv_type: gae     # nae or gae
+    gamma: *gamma
+    lam: .95
+    n_envs: *nenvs
+    n_trajs: *ntrajs
+    N_STEPS: *nsteps
+    N_EPOCHS: *nepochs
+    N_MBS: *nmbs        # number of minibatches
+    norm_adv: minibatch
+    sample_keys: [obs, action, value, traj_ret, advantage, logpi]
+    # mini-batch size = n_workers * n_envs * epslen / n_mbs

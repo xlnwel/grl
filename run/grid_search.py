@@ -3,7 +3,7 @@ import logging
 from copy import deepcopy
 from multiprocessing import Process
 
-from utility.utils import flatten_dict
+from utility.utils import product_flatten_dict
 logger = logging.getLogger(__name__)
 
 class GridSearch:
@@ -43,7 +43,7 @@ class GridSearch:
                                         f'{self.agent_config["algorithm"]}')
 
     def _change_config(self, **kwargs):
-        kw_list = flatten_dict(**kwargs)
+        kw_list = product_flatten_dict(**kwargs)
         for d in kw_list:
             # deepcopy to avoid unintended conflicts
             env_config = deepcopy(self.env_config)

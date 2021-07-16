@@ -39,9 +39,9 @@ def train(agent, env, eval_env, replay):
     while env_step <= int(agent.MAX_STEPS):
         with rt:
             env_step = runner.run(step_fn=collect)
+        assert np.all(runner.env_output.reset), runner.env_output.reset
         replay.finish_episodes()
-        assert np.all(runner.env_output.reset), \
-            (runner.env_output.reset, env.info().get('score', 0), env.info().get('epslen', 0))
+
         with tt:
             agent.learn_log(env_step)
 
@@ -96,12 +96,13 @@ def main(env_config, model_config, agent_config, replay_config):
         sigint_shutdown_ray()
 
     env = create_env(env_config)
-    eval_env_config = env_config.copy()
-    eval_env_config['n_workers'] = 1
-    eval_env_config['n_envs'] = 1
-    reward_key = [k for k in eval_env_config.keys() if 'reward' in k]
-    [eval_env_config.pop(k) for k in reward_key]
-    eval_env = create_env(eval_env_config, force_envvec=True)
+    # eval_env_config = env_config.copy()
+    # eval_env_config['n_workers'] = 1
+    # eval_env_config['n_envs'] = 1
+    # reward_key = [k for k in eval_env_config.keys() if 'reward' in k]
+    # [eval_env_config.pop(k) for k in reward_key]
+    # eval_env = create_env(eval_env_config, force_envvec=True)
+    eval_env = None
 
     agent_config['N_UPDATES'] *= env_config['n_workers'] * env_config['n_envs']
     create_model, Agent = pkg.import_agent(config=agent_config)

@@ -15,7 +15,7 @@ from run.args import parse_eval_args
 
 def main(env_config, model_config, agent_config, replay_config,
         n, record=False, size=(128, 128), video_len=1000, 
-        fps=30, save=False):
+        force_envvec=False, fps=30, save=False):
     silence_tf_logs()
     configure_gpu()
     configure_precision(agent_config.get('precision', 32))
@@ -34,7 +34,11 @@ def main(env_config, model_config, agent_config, replay_config,
     except:
         make_env = None
     env_config.pop('reward_clip', False)
-    env = create_env(env_config, env_fn=make_env)
+    if env_name.startswith('procgen') and record:
+        env_config['render_mode'] = 'rgb_array'
+
+    env = create_env(env_config, env_fn=make_env, 
+        force_envvec=force_envvec)
     create_model, Agent = pkg.import_agent(config=agent_config)    
     models = create_model(model_config, env)
 
@@ -46,14 +50,18 @@ def main(env_config, model_config, agent_config, replay_config,
 
     if n < env.n_envs:
         n = env.n_envs
-    scores, epslens, video = evaluate(env, agent, n, record=record, size=size, video_len=video_len)
+    scores, epslens, video = evaluate(
+        env, agent, n, record=record, size=size, video_len=video_len)
     pwc(f'After running {n} episodes',
-        f'Score: {np.mean(scores):.3g}\tEpslen: {np.mean(epslens):.3g}', color='cyan')
+        f'Score: {np.mean(scores):.3g}',
+        f'Epslen: {np.mean(epslens):.3g}', 
+        color='cyan')
 
     if record:
         save_video(f'{algo_name}-{env_name}', video, fps=fps)
     if use_ray:
         ray.shutdown()
+
 
 if __name__ == '__main__':
     args = parse_eval_args()
@@ -97,4 +105,5 @@ if __name__ == '__main__':
 
     main(env_config, model_config, agent_config, 
         replay_config, n=n, record=args.record, size=args.size, 
-        video_len=args.video_len, fps=args.fps, save=args.save)
+        video_len=args.video_len, force_envvec=args.force_envvec,
+        fps=args.fps, save=args.save)

@@ -2,7 +2,7 @@ import tensorflow as tf
 
 from utility.tf_utils import assert_rank
 from core.module import Ensemble
-from nn.func import Encoder, LSTM
+from nn.func import Encoder, rnn
 from algo.iqn.nn import Quantile, Value
 
 
@@ -102,8 +102,8 @@ def create_components(config, env):
     if config.get('rnn'):
         rnn_config = config['rnn']
         model.update({
-            'rnn': LSTM(rnn_config, name='rnn'),
-            'target_rnn': LSTM(rnn_config, name='target_rnn')
+            'rnn': rnn(rnn_config, name='rnn'),
+            'target_rnn': rnn(rnn_config, name='target_rnn')
         })
 
     return model

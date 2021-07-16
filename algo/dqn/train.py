@@ -1,6 +1,7 @@
 import functools
 
 from core.tf_config import *
+from core.dataset import create_dataset
 from utility.utils import Every, TempStore
 from utility.graph import video_summary
 from utility.timer import Timer
@@ -8,7 +9,6 @@ from utility.run import Runner, evaluate
 from utility import pkg
 from env.func import create_env
 from replay.func import create_replay
-from core.dataset import create_dataset
 
 
 def train(agent, env, eval_env, replay):

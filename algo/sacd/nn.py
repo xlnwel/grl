@@ -52,7 +52,7 @@ class Actor(Module):
             action = dist.sample()
             if not self._epsilon_scaled_logits and \
                     (isinstance(epsilon, tf.Tensor) or epsilon):
-                action = epsilon_greedy(action, epsilon, True, self.action_dim)
+                action = epsilon_greedy(action, epsilon, True, action_dim=self.action_dim)
 
         self._dist = dist
         self._action = action

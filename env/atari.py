@@ -199,3 +199,7 @@ class Atari:
             self.env.ale.getScreenGrayscale(output)
         else:
             self.env.ale.getScreenRGB2(output)
+
+    @property
+    def is_multiagent(self):
+        return False

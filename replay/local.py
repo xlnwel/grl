@@ -5,7 +5,7 @@ import math
 import numpy as np
 
 from core.decorator import config
-from utility.utils import flatten_dict
+from utility.utils import batch_dicts, flatten_dict
 from replay.utils import *
 
 logger = logging.getLogger(__name__)
@@ -26,7 +26,8 @@ class LocalBuffer(ABC):
         return self._replay_type
 
     def is_full(self):
-        return self._idx >= self._memlen
+        assert self._idx <= self._memlen, (self._idx, self._memlen)
+        return self._idx == self._memlen
 
     @property
     def seqlen(self):
@@ -220,10 +221,10 @@ class EnvVecSequentialBuffer(SequentialBuffer):
 class EnvEpisodicBuffer(LocalBuffer):
     def _add_attributes(self):
         super()._add_attributes()
-        self.reset()
+        self._memory = collections.defaultdict(list)
     
     def reset(self):
-        self._memory = collections.defaultdict(list)
+        self._memory.clear()
 
     def sample(self):
         results = {k: np.array(v) for k, v in self._memory.items()}
@@ -237,36 +238,63 @@ class EnvEpisodicBuffer(LocalBuffer):
 
 class EnvFixedEpisodicBuffer(EnvEpisodicBuffer):
     def _add_attributes(self):
-        self._memlen = self._seqlen + 1
-        self.reset()
+        super()._add_attributes()
+        self._memlen = self._seqlen + 1 # one for the last observation
 
     def reset(self):
         super().reset()
         self._idx = 0
+        assert len(self._memory) == 0, self._memory
+
+    def add(self, **data):
+        super().add(**data)
+        self._idx += 1
 
     def sample(self):
-        if self.is_full():
-            results = {k: np.array(v) for k, v in self._memory.items()}
-            for k, v in results.items():
-                assert v.shape[0] >= 60, [
-                    (kk, vv.shape) for kk, vv in results.items()
-                ]
-            self.reset()
-            return results
-        else:
-            self.reset()
-    
-    def add(self, idxes=None, flush=True, **data):
-        self._idx += 1
-        super().add(**data)
+        assert self.is_full(), self._idx
+        results = {k: np.array(v) for k, v in self._memory.items()}
+        for k, v in results.items():
+            assert v.shape[0] >= self._seqlen, [
+                (kk, vv.shape) for kk, vv in results.items()
+            ]
+        return results
 
 
 class EnvVecFixedEpisodicBuffer(EnvFixedEpisodicBuffer):
-    def sample(self):
-        if self.is_full():
-            results = {k: np.array(v) for k, v in self._memory.items()}
-            results = flatten_dict(results)
-            self.reset()
-            return results
+    def _add_attributes(self):
+        super()._add_attributes()
+        self.reset()
+
+    def reset(self, idxes=None):
+        if idxes is None:
+            self._memory = [
+                collections.defaultdict(list) 
+                for _ in range(self._n_envs)]
+            self._idx = 0
+        elif isinstance(idxes, (list, tuple)):
+            # do not reset self._idx here; 
+            # we only drop the bad episodes given by idxes
+            [self._memory[i].clear() for i in idxes]
         else:
-            self.reset()
+            raise ValueError(idxes)
+
+    def add(self, **data):
+        # we do not add all data at once since 
+        # some environments throw errors and 
+        # we need to drop these data accordingly
+        for k, v in data.items():
+            for i in range(self._n_envs):
+                self._memory[i][k].append(v[i])
+        self._idx += 1
+
+    def sample(self, batch_data=False):
+        assert self.is_full(), (self._idx, self._memlen)
+        results = [d for d in self._memory if d]
+        if batch_data:
+            results = batch_dicts(results)
+            for k, v in results.items():
+                assert v.shape[1] >= self._seqlen, [
+                    (kk, vv.shape) for kk, vv in results.items()
+                ]
+
+        return results

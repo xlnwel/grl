@@ -46,7 +46,7 @@ def train(agent, env, eval_env, buffer):
         agent.save(print_terminal_info=True)
 
     runner.step = step
-    # print("Initial running stats:", *[f'{k:.4g}' for k in agent.get_running_stats() if k])
+    # print("Initial running stats:", *[f'{k:.4g}' for k in agent.get_rms_stats() if k])
     to_log = Every(agent.LOG_PERIOD, agent.LOG_PERIOD)
     to_eval = Every(agent.EVAL_PERIOD)
     rt = Timer('run')

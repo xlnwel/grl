@@ -77,5 +77,5 @@ class RND:
     def rms_restored(self):
         return self._rms_restored
     
-    def get_running_stats(self):
-        return self._obs_rms.get_stats(), self._int_return_rms.get_stats()
+    def get_rms_stats(self):
+        return self._obs_rms.get_rms_stats(), self._int_return_rms.get_rms_stats()

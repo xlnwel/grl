@@ -9,34 +9,7 @@ from env import wrappers
 EnvOutput = wrappers.EnvOutput
 
 
-def make_env(config):
-    config = config.copy()
-    env_name = config['name'].lower()
-    if env_name.startswith('smac2'):
-        from env import smac2
-        env = smac2.make_smac_env(config)
-        # smac2 resembles single agent environments, in which done and reward are team-based
-        env = wrappers.EnvStats(env)
-        return env
-    elif env_name.startswith('smac'):
-        from env import smac
-        env = smac.make_smac_env(config)
-        env = wrappers.MAEnvStats(env)
-        return env
-    elif env_name.startswith('atari'):
-        from env import atari
-        env = atari.make_atari_env(config)
-    else:
-        if env_name.startswith('procgen'):
-            from env import procgen
-            env = procgen.make_procgen_env(config)
-        elif env_name.startswith('dmc'):
-            from env import dmc
-            env = dmc.make_dmc_env(config)
-        else:
-            env = gym.make(config['name']).env
-            env = wrappers.DummyEnv(env)    # useful for hidding unexpected frame_skip
-            config.setdefault('max_episode_steps', env.spec.max_episode_steps)
+def process_single_agent_env(env, config):
     if config.get('reward_scale') or config.get('reward_clip'):
         env = wrappers.RewardHack(env, **config)
     frame_stack = config.setdefault('frame_stack', 1)
@@ -50,6 +23,66 @@ def make_env(config):
         distance = config.setdefault('distance', 1)
         env = wrappers.FrameDiff(env, gray_scale_residual, distance)
     env = wrappers.post_wrap(env, config)
+    return env
+
+def make_mpe(config):
+    from env.mpe import make_mpe_env
+    env = make_mpe_env(config)
+    env = wrappers.DataProcess(env)
+    env = wrappers.MAEnvStats(env)
+    return env
+
+def make_smac(config):
+    from env.smac import make_smac_env
+    env = make_smac_env(config)
+    env = wrappers.MAEnvStats(env)
+    return env
+
+def make_smac2(config):
+    from env.smac2 import make_smac_env
+    env = make_smac_env(config)
+    # smac2 resembles single agent environments, in which done and reward are team-based
+    env = wrappers.EnvStats(env)
+    return env
+
+def make_atari(config):
+    from env.atari import make_atari_env
+    env = make_atari_env(config)
+    env = process_single_agent_env(env, config)
+    return env
+
+def make_procgen(config):
+    from env.procgen import make_procgen_env
+    env = make_procgen_env(config)
+    env = process_single_agent_env(env, config)
+    return env
+
+def make_dmc(config):
+    from env.dmc import make_dmc_env
+    env = make_dmc_env(config)
+    env = process_single_agent_env(env, config)
+    return env
+
+def make_built_int_gym(config):
+    env = gym.make(config['name']).env
+    env = wrappers.DummyEnv(env)    # useful for hidding unexpected frame_skip
+    config.setdefault('max_episode_steps', 
+        env.spec.max_episode_steps)
+    env = process_single_agent_env(env, config)
+    return env
+
+def make_env(config):
+    config = config.copy()
+    env_name = config['name'].lower()
+    env_func = dict(
+        mpe=make_mpe,
+        smac=make_smac,
+        smac2=make_smac2,
+        atari=make_atari,
+        procgen=make_procgen,
+        dmc=make_dmc,
+    ).get(env_name.split('_', 1)[0], make_built_int_gym)
+    env = env_func(config)
     
     return env
 
@@ -187,9 +220,12 @@ class EnvVec(EnvVecBase):
             obs = batch_dicts(obs)
         return obs
 
-    def info(self, idxes=None):
+    def info(self, idxes=None, convert_batch=False):
         idxes = self._get_idxes(idxes)
-        return [self.envs[i].info() for i in idxes]
+        info = [self.envs[i].info() for i in idxes]
+        if convert_batch:
+            info = batch_dicts(info)
+        return info
 
     def output(self, idxes=None):
         idxes = self._get_idxes(idxes)
@@ -225,7 +261,6 @@ class EnvVec(EnvVecBase):
 
     def close(self):
         if hasattr(self.env, 'close'):
-            self.env.close()
             [env.close() for env in self.envs]
 
 

@@ -42,7 +42,7 @@ agent:
     batch_size: &bs 64
     precision: 32
 
-    schedule_act_eps: False
+    schedule_act_eps: True
     act_eps_type: line
     act_eps: .3
     eval_act_eps: 0

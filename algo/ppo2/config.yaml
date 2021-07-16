@@ -11,6 +11,7 @@ model:
         kernel_initializer: glorot_uniform
         activation: tanh
     rnn:
+        rnn_name: mlstm
         units: 64
         use_ln: False
     actor:

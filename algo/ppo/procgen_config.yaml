@@ -6,6 +6,7 @@ env:
     frame_skip: 1
     frame_stack: 1
     # num_levels: 200
+    distribution_mode: easy
 
 model:
     encoder: 
@@ -25,12 +26,12 @@ model:
 
 agent:
     algorithm: &algo ppo
-    precision: 32
+    precision: 16
     gamma: &gamma .999
 
-    MAX_STEPS: 2.5e7
+    MAX_STEPS: 2e8
     N_STEPS: &nsteps 256
-    N_EPOCHS: 3
+    N_EPOCHS: &nepochs 3
     N_MBS: &nmbs 8
     LOG_PERIOD: 100
     EVAL_PERIOD: 100
@@ -50,7 +51,7 @@ agent:
     root_dir: *algo                         # root path for tensorboard logs
     model_name: *algo
     RECORD: True
-    
+
     # arguments for optimizer
     optimizer: adam
     schedule_lr: False
@@ -65,11 +66,14 @@ agent:
     value_coef: .5
 
 buffer:
+    use_dataset: True
+
     adv_type: gae     # nae or gae
     gamma: *gamma
     lam: .95
     n_envs: *nenvs
     N_STEPS: *nsteps
+    N_EPOCHS: *nepochs
     N_MBS: *nmbs        # number of minibatches
     norm_adv: minibatch
     sample_keys: [obs, action, value, traj_ret, advantage, logpi]

@@ -2,7 +2,7 @@ import tensorflow as tf
 
 from utility.tf_utils import assert_rank
 from core.module import Ensemble
-from nn.func import LSTM
+from nn.func import rnn
 from algo.ppo.nn import Encoder, Actor, Value
 
 
@@ -92,13 +92,6 @@ class PPO(Ensemble):
             inputs, batch_size=batch_size, dtype=dtype) \
                 if hasattr(self, 'rnn') else None
 
-    @property
-    def state_size(self):
-        return self.rnn.state_size if hasattr(self, 'rnn') else None
-        
-    @property
-    def state_keys(self):
-        return self.rnn.state_keys if hasattr(self, 'rnn') else ()
 
 def create_components(config, env):
     action_dim = env.action_dim
@@ -108,11 +101,11 @@ def create_components(config, env):
         config['encoder']['time_distributed'] = True
     models = dict(
         encoder=Encoder(config['encoder']), 
+        rnn=rnn(config['rnn']),
         actor=Actor(config['actor'], action_dim, is_action_discrete),
         value=Value(config['value'])
     )
-    if 'rnn' in config:
-        models['rnn'] = LSTM(config['rnn'])
+
     return models
 
 def create_model(config, env, **kwargs):

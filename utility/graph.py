@@ -71,6 +71,7 @@ def save_video(name, video, fps=30):
         video = np.expand_dims(video, 0)
     B, T, H, W, C = video.shape
     if B != 1:
+        # merge multiple videos into a single video
         bh, bw = squarest_grid_size(B)
         frames = video.reshape((bh, bw, T, H, W, C))
         frames = frames.transpose((2, 0, 3, 1, 4, 5))

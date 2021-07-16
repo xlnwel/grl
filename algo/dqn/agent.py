@@ -10,7 +10,8 @@ class Agent(DQNBase):
     def _learn(self, obs, action, reward, next_obs, discount, steps=1, IS_ratio=1):
         loss_fn = dict(
             huber=huber_loss, mse=lambda x: .5 * x**2)[self._loss_type]
-        target, terms = self._compute_target(obs, action, reward, next_obs, discount, steps)
+        target, terms = self._compute_target(
+            obs, action, reward, next_obs, discount, steps)
 
         with tf.GradientTape() as tape:
             q = self._compute_qs(obs, action=action)
@@ -62,9 +63,11 @@ class Agent(DQNBase):
         if self._probabilistic_regularization is None:
             if self._double:
                 next_online_qs = self._compute_qs(next_obs)
-                next_action = self.q.compute_greedy_action(next_online_qs, one_hot=True)
+                next_action = self.q.compute_greedy_action(
+                    next_online_qs, one_hot=True)
             else:
-                next_action = self.target_q.compute_greedy_action(next_qs, one_hot=True)
+                next_action = self.target_q.compute_greedy_action(
+                    next_qs, one_hot=True)
             next_v = tf.reduce_sum(next_qs * next_action, axis=-1)
         elif self._probabilistic_regularization == 'prob':
             next_pi = softmax(next_qs, self._tau)
@@ -72,11 +75,14 @@ class Agent(DQNBase):
         elif self._probabilistic_regularization == 'entropy':
             next_pi = softmax(next_qs, self._tau)
             next_logpi = log_softmax(next_qs, self._tau)
-            terms['next_entropy'] = - tf.reduce_sum(next_pi * next_logpi / self._tau, axis=-1)
-            next_v = tf.reduce_sum((next_qs - next_logpi) * next_pi, axis=-1)
+            terms['next_entropy'] = - tf.reduce_sum(
+                next_pi * next_logpi / self._tau, axis=-1)
+            next_v = tf.reduce_sum(
+                (next_qs - next_logpi) * next_pi, axis=-1)
         else:
             raise ValueError(self._probabilistic_regularization)
 
-        target = n_step_target(reward, next_v, discount, self._gamma, steps, self._tbo)
+        target = n_step_target(
+            reward, next_v, discount, self._gamma, steps, self._tbo)
 
         return target, terms
