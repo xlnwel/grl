@@ -1,8 +1,10 @@
 import numpy as np
 import gym
 
+from env.utils import process_single_agent_env
 
-def make_dmc_env(config):
+
+def make_dmc(config):
     assert 'dmc' in config['name']
     task = config['name'].split('_', 1)[-1]
     env = DeepMindControl(
@@ -10,6 +12,7 @@ def make_dmc_env(config):
         size=config.setdefault('size', (84, 84)), 
         frame_skip=config.setdefault('frame_skip', 1))
     config.setdefault('max_episode_steps', 1000)
+    env = process_single_agent_env(env, config)
 
     return env
 

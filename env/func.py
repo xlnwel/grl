@@ -4,6 +4,7 @@ from env.cls import Env, EnvVec, make_env
 
 
 def create_env(config, env_fn=None, force_envvec=False):
+    """ Creates an Env/EnvVec from config """
     config = config.copy()
     env_fn = env_fn or make_env
     if config.get('n_workers', 1) <= 1:

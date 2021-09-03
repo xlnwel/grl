@@ -41,8 +41,8 @@ class MultiAgentEnv(gym.Env):
         self.max_episode_steps = self.world_length
 
         # environment parameters
-        # self.discrete_action_space = True
-        self.discrete_action_space = discrete_action
+        # self.is_action_discrete = True
+        self.is_action_discrete = discrete_action
 
         self.use_global_state = use_global_state
 
@@ -68,7 +68,7 @@ class MultiAgentEnv(gym.Env):
             total_action_space = []
             
             # physical action space
-            if self.discrete_action_space:
+            if self.is_action_discrete:
                 u_action_space = spaces.Discrete(world.dim_p * 2 + 1)
             else:
                 u_action_space = spaces.Box(
@@ -77,7 +77,7 @@ class MultiAgentEnv(gym.Env):
                 total_action_space.append(u_action_space)
 
             # communication action space
-            if self.discrete_action_space:
+            if self.is_action_discrete:
                 c_action_space = spaces.Discrete(world.dim_c)
             else:
                 c_action_space = spaces.Box(low=0.0, high=1.0, shape=(
@@ -132,10 +132,6 @@ class MultiAgentEnv(gym.Env):
     @property
     def action_space(self):
         return self.action_spaces[0]
-    
-    @property
-    def is_action_discrete(self):
-        return True
 
     @property
     def action_shape(self):
@@ -315,7 +311,7 @@ class MultiAgentEnv(gym.Env):
                     agent.action.u[1] = +1.0
                 d = self.world.dim_p
             else:
-                if self.discrete_action_space:
+                if self.is_action_discrete:
                     agent.action.u[0] += action[0][1] - action[0][2]
                     agent.action.u[1] += action[0][3] - action[0][4]
                     d = 5

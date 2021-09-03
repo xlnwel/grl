@@ -57,16 +57,6 @@ def get_data_format(*, env, batch_size, sample_size=None,
 
     return data_format
 
-def random_actor_with_life_mask(env_output, env=None, **kwargs):
-    obs = env_output.obs
-    a = np.concatenate(env.random_action())
-    terms = {
-        'obs': np.concatenate(obs['obs']), 
-        'global_state': np.concatenate(obs['global_state']),
-        'life_mask': obs['life_mask'],
-    }
-    return a, terms
-
 def random_actor(env_output, env=None, **kwargs):
     obs = env_output.obs
     a = np.concatenate(env.random_action())
@@ -224,7 +214,8 @@ class Agent(Memory, PPOBase):
             })
             if self._use_action_mask:
                 out[1]['action_mask'] = kwargs['action_mask']
-
+            if self._use_life_mask:
+                out[1]['life_mask'] = kwargs['life_mask']
         return out
 
     """ PPO methods """
@@ -251,8 +242,10 @@ class Agent(Memory, PPOBase):
             mask=mask,
             return_state=return_state,
         )
-        out = self.model.compute_value(global_state, **kwargs)
-        return tensor2numpy(out)
+        value = self.model.compute_value(global_state, **kwargs)
+        value = tensor2numpy(value)
+        value = value.reshape(-1, self._n_agents)
+        return value
 
     @tf.function
     def _learn(self, obs, global_state, action, value, 
@@ -347,13 +340,13 @@ class Agent(Memory, PPOBase):
 
     def _sample_learn(self):
         n = super()._sample_learn()
-
         for _ in range(self.N_VALUE_EPOCHS):
             for _ in range(self.N_MBS):
                 data = self.dataset.sample(self._value_sample_keys)
 
-                data = {k: tf.convert_to_tensor(v) for k, v in data.items()}
-                
+                data = {k: tf.convert_to_tensor(data[k]) 
+                    for k in self._value_sample_keys}
+
                 terms = self.learn_value(**data)
                 terms = {f'train/{k}': v.numpy() for k, v in terms.items()}
                 self.store(**terms)

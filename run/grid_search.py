@@ -6,6 +6,7 @@ from multiprocessing import Process
 from utility.utils import product_flatten_dict
 logger = logging.getLogger(__name__)
 
+
 class GridSearch:
     def __init__(self, env_config, model_config, agent_config, replay_config, 
                 train_func, n_trials=1, logdir='logs', dir_prefix='', 

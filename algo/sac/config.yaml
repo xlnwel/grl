@@ -1,6 +1,6 @@
 ---
 env:
-    name: LunarLanderContinuous-v2
+    name: Hopper-v3
     # reward_clip: 10
 
 model:
@@ -22,20 +22,18 @@ agent:
     algorithm: &algo sac
     replay_type: &replay uniform
     gamma: &gamma .99
-    batch_size: &bs 256
+    batch_size: &bs 100
     n_steps: &nsteps 3
     polyak: .995
-
-    tsallis_q: 1
 
     act_eps: 0
     eval_act_eps: 0
 
     MAX_STEPS: 3e6
-    TRAIN_PERIOD: 1
+    TRAIN_PERIOD: 50
     LOG_PERIOD: 5000
     EVAL_PERIOD: 5000
-    N_UPDATES: 1
+    N_UPDATES: 50
     N_EVAL_EPISODES: 1
     # RECORD: True
 

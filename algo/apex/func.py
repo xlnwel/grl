@@ -3,7 +3,7 @@ import tensorflow as tf
 import ray
 
 from replay.func import create_local_buffer
-from algo.apex.monitor import Monitor
+from algo.apex.actor import Monitor
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +37,7 @@ def ray_remote_config(config, name,
 
 def create_monitor(config):
     config = config.copy()
-    RayMonitor = ray.remote(Monitor)
+    RayMonitor = Monitor.as_remote()
     monitor = RayMonitor.remote(config=config)
 
     return monitor
@@ -55,8 +55,7 @@ def create_learner(
     env_config['n_workers'] = 1
 
     ray_config = ray_remote_config(config, 'learner')
-    RayLearner = ray.remote(**ray_config)(Learner) \
-        if ray_config else ray.remote(Learner)
+    RayLearner = Learner.as_remote(**ray_config)
     learner = RayLearner.remote( 
         model_fn=model_fn, 
         replay=replay,
@@ -93,8 +92,7 @@ def create_worker(
     env_config['n_workers'] = 1
 
     ray_config = ray_remote_config(config, 'worker')
-    RayWorker = ray.remote(**ray_config)(Worker) \
-        if ray_config else ray.remote(Worker)
+    RayWorker = Worker.as_remote(**ray_config)
     worker = RayWorker.remote(
         worker_id=worker_id, 
         config=config, 
@@ -121,7 +119,7 @@ def create_evaluator(Evaluator, model_fn, config, model_config, env_config):
     env_config['n_workers'] = 1
     env_config['n_envs'] = env_config.pop('n_eval_envs', 4)
 
-    RayEvaluator = ray.remote(num_cpus=1)(Evaluator)
+    RayEvaluator = Evaluator.as_remote(num_cpus=1)
     evaluator = RayEvaluator.remote(
         config=config,
         model_config=model_config,

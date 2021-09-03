@@ -5,6 +5,7 @@ from tensorflow.keras import mixed_precision
 
 logger = logging.getLogger(__name__)
 
+
 def configure_gpu(idx=0):
     """ Configures gpu for Tensorflow
     Args:

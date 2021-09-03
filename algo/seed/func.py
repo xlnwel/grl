@@ -1,5 +1,3 @@
-import ray
-
 from algo.apex.func import disable_info_logging, ray_remote_config, \
     create_learner, create_monitor, create_evaluator
 
@@ -19,8 +17,7 @@ def create_worker(
     env_config['n_workers'] = 1
 
     ray_config = ray_remote_config(config, 'worker', default_cpus=1)
-    RayWorker = ray.remote(**ray_config)(Worker) \
-        if ray_config else ray.remote(Worker)
+    RayWorker = Worker.as_remote(**ray_config)
     worker = RayWorker.remote(
         worker_id=worker_id, 
         config=config, 
@@ -37,8 +34,7 @@ def create_actor(Actor, actor_id, model_fn, config, model_config, env_config):
     config = disable_info_logging(config)
 
     ray_config = ray_remote_config(config, 'actor')
-    RayActor = ray.remote(**ray_config)(Actor) \
-        if ray_config else ray.remote(Actor)
+    RayActor = Actor.as_remote(**ray_config)
     actor = RayActor.remote(
         actor_id=actor_id,
         model_fn=model_fn, 

@@ -81,7 +81,8 @@ class Temperature(Module):
 
         if self._temp_type == 'state':
             kernel_initializer = get_initializer('orthogonal', gain=.01)
-            self._layer = layers.Dense(1, name=name)
+            self._layer = layers.Dense(1, 
+                kernel_initializer=kernel_initializer, name=name)
         elif self._temp_type == 'variable':
             self._log_temp = tf.Variable(np.log(self._value), dtype=tf.float32, name=name)
         elif self._temp_type == 'constant':

@@ -89,13 +89,15 @@ class DQNBase(TargetNetOps, ActionScheduler, AgentBase):
             value_models, lr=self._value_lr)
 
         temp_models = []
-        if hasattr(self, 'temperature') and self.temperature.is_trainable():
+        if hasattr(self, 'temperature'):
             temp_models = [self.temperature]
             logger.info(f'Temperature model: {temp_models}')
-            self._temp_opt = super()._construct_opt(
-                temp_models, lr=self._temp_lr)
-            if isinstance(getattr(self, '_target_entropy_coef', None), (list, tuple)):
-                self._target_entropy_coef = TFPiecewiseSchedule(self._target_entropy_coef)
+            if self.temperature.is_trainable():
+                self._temp_opt = super()._construct_opt(
+                    temp_models, lr=self._temp_lr)
+                if isinstance(getattr(
+                    self, '_target_entropy_coef', None), (list, tuple)):
+                    self._target_entropy_coef = TFPiecewiseSchedule(self._target_entropy_coef)
         
         return actor_models + value_models + temp_models
 

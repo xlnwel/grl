@@ -28,12 +28,10 @@ from env.smac_maps import get_map_params
 from env import wrappers
 
 
-def make_smac2(config):
+def make_smac4(config):
     config = config.copy()
     config['name'] = config['name'].split('_', maxsplit=1)[1]
     env = SMAC(**config)
-    # smac2 resembles single agent environments, in which done and reward are team-based
-    env = wrappers.EnvStats(env)
     env = wrappers.MAEnvStats(env)
     return env
 
@@ -75,10 +73,9 @@ class Direction(enum.IntEnum):
 def info_func(agent, info):
     if isinstance(info, list):
         won = [i['won'] for i in info]
-        extra_padding = [i.get('extra_padding', 0) for i in info]
     else:
         won = np.float32(info['won'])
-        extra_padding = info.get('extra_padding', 0)
+    extra_padding = info.get('extra_padding', 0)
     agent.store(win_rate=won, extra_padding=extra_padding)
 
 
@@ -90,6 +87,7 @@ class SMAC(gym.Env):
     def __init__(
         self,
         name,
+        fixed_episode_length=True,
         # all the above are from args
         step_mul=8,
         move_amount=2,
@@ -228,6 +226,7 @@ class SMAC(gym.Env):
         
         # Map arguments
         self.name = name
+        self.fixed_episode_length = fixed_episode_length
 
         map_params = get_map_params(self.name)
         self.n_agents = map_params["n_agents"]
@@ -263,7 +262,6 @@ class SMAC(gym.Env):
         self.reward_death_value = reward_death_value
         self.reward_win = reward_win
         self.reward_defeat = reward_defeat
-
         self.reward_scale = reward_scale
         self.reward_scale_rate = reward_scale_rate
 
@@ -326,8 +324,6 @@ class SMAC(gym.Env):
         self._sc2_proc = None
         self._controller = None
 
-        self._reset_for_error = False
-
         # Try to avoid leaking SC2 processes on shutdown
         atexit.register(self.close)
 
@@ -341,9 +337,9 @@ class SMAC(gym.Env):
         
         self._empty_obs = dict(
             obs=np.zeros((self.n_agents, *self.obs_shape), np.float32),
-            global_state=np.zeros(self.shared_state_shape, np.float32),
+            global_state=np.zeros((self.n_agents, *self.shared_state_shape), np.float32),
             action_mask=np.zeros((self.n_agents, self.n_actions), np.bool),
-            episodic_mask=False,
+            life_mask=np.zeros(self.n_agents, np.float32),
         )
 
     def random_action(self):
@@ -353,10 +349,6 @@ class SMAC(gym.Env):
             actions.append(random.choice(choices))
             
         return np.stack(actions)
-
-    @property
-    def is_multiagent(self):
-        return True
 
     @property
     def action_space(self):
@@ -457,15 +449,9 @@ class SMAC(gym.Env):
         """Reset the environment. Required after each full episode.
         Returns initial observations and states.
         """
-        if self._reset_for_error:
-            # the environment has already reset due to an error
-            self._reset_for_error = False
-            assert self._last_reset_obs is not None, self._last_reset_obs
-            obs = self._last_reset_obs
-            self._last_reset_obs = None
-            return obs
-        
-        self._reset_track_stats()
+        self._episode_steps = 0
+        self._fake_episode_steps = 0
+        self._score = 0
         self._game_over = False
 
         if self._episode_count == 0:
@@ -500,7 +486,7 @@ class SMAC(gym.Env):
             print("Started Episode {}"
                           .format(self._episode_count).center(60, "*"))
 
-        global_state = self.get_state()
+        global_state = np.array([self.get_state() for _ in range(self.n_agents)], np.float32)
 
         local_obs = self.get_obs()
 
@@ -508,9 +494,8 @@ class SMAC(gym.Env):
             obs=local_obs,
             global_state=global_state,
             action_mask=np.array(available_actions, np.bool),
-            episodic_mask=True
+            life_mask=np.ones(self.n_agents, np.float32)
         )
-
         return obs_dict
 
     def _restart(self):
@@ -532,10 +517,20 @@ class SMAC(gym.Env):
 
     def step(self, action):
         """A single environment step. Returns reward, terminated, info."""
-        if self._game_over \
+        if self.fixed_episode_length and self._game_over \
                 and self._fake_episode_steps < self.max_episode_steps:
-            return self._fake_step(bad_episode=False)
+            self._fake_episode_steps += 1
+            obs = self._empty_obs.copy()
+            info = {
+                "won": [self.win_counted for _ in range(self.n_agents)],
+                'score': self._score,
+                'epslen': self._episode_steps,
+                'game_over': self._fake_episode_steps == self.max_episode_steps,
+                'extra_padding': self._fake_episode_steps - self._episode_steps
+            }
 
+            return obs, np.zeros(self.n_agents, np.float32), np.ones(self.n_agents, np.bool), info
+        self._fake_episode_steps += 1
         terminated = False
         infos = [{} for i in range(self.n_agents)]
 
@@ -549,13 +544,13 @@ class SMAC(gym.Env):
         if self.debug:
             print("Actions".center(60, "-"))
 
-        for a_id, a in enumerate(actions_int):
+        for a_id, action in enumerate(actions_int):
             if not self.heuristic_ai:
-                sc_action = self.get_agent_action(a_id, a)
+                sc_action = self.get_agent_action(a_id, action)
             else:
                 sc_action, action_num = self.get_agent_action_heuristic(
-                    a_id, a)
-                a[a_id] = action_num
+                    a_id, action)
+                action[a_id] = action_num
             if sc_action:
                 sc_actions.append(sc_action)
 
@@ -567,11 +562,8 @@ class SMAC(gym.Env):
             self._controller.step(self._step_mul)
             # Observe here so that we know if the episode is over.
             self._obs = self._controller.observe()
-        except (protocol.ProtocolError, protocol.ConnectionError) as e:
-            print('Restart due to an exception:', e)
-            if self._fake_episode_steps < self.max_episode_steps:
-                self._game_over = True
-                return self._fake_step(bad_episode=True)
+        except (protocol.ProtocolError, protocol.ConnectionError):
+            print('Restart due to an exception')
             self.full_restart()
             terminated = True
             available_actions = []
@@ -585,7 +577,7 @@ class SMAC(gym.Env):
                     "won": self.win_counted
                 }
 
-            global_state = self.get_state()
+            global_state = np.array([self.get_state() for _ in range(self.n_agents)], np.float32)
             
             local_obs = self.get_obs()
 
@@ -593,9 +585,9 @@ class SMAC(gym.Env):
                 obs=local_obs,
                 global_state=global_state,
                 action_mask=np.array(available_actions, np.bool),
-                episodic_mask=True
+                life_mask=np.ones(self.n_agents, np.float32)
             )
-            reward = 0
+            reward = np.zeros(self.n_agents, np.float32)
             self._game_over = terminated
             info = batch_dicts(infos)
             info.update({
@@ -603,16 +595,11 @@ class SMAC(gym.Env):
                 'epslen': self._episode_steps,
                 'game_over': True
             })
-
-            self._reset_track_stats()
-            self._reset_for_error = True
-            self._last_reset_obs = obs_dict
-
-            return obs_dict, reward, terminated, info
+            dones = np.ones(self.n_agents, np.bool)
+            return obs_dict, reward, dones, info
 
         self._total_steps += 1
         self._episode_steps += 1
-        self._fake_episode_steps += 1
         # Update units
         game_end_code = self.update_units()
 
@@ -666,8 +653,9 @@ class SMAC(gym.Env):
             reward /= self.max_reward / self.reward_scale_rate
 
         self._score += reward
+        reward = np.ones(self.n_agents, np.float32) * reward
 
-        global_state = self.get_state()
+        global_state = np.array([self.get_state() for _ in range(self.n_agents)], np.float32)
 
         local_obs = self.get_obs()
 
@@ -675,38 +663,22 @@ class SMAC(gym.Env):
             obs=local_obs,
             global_state=global_state,
             action_mask=np.array(available_actions, np.bool),
-            episodic_mask=True
+            life_mask=np.ones(self.n_agents, np.float32)
         )
         self._game_over = terminated
         info = batch_dicts(infos)
         info.update({
             'score': self._score,
             'epslen': self._episode_steps,
-            'game_over': self._episode_steps == self.max_episode_steps
+            'game_over': self._epslen == self.max_episode_steps,
         })
 
-        self._reset_for_error = False
-
-        return obs_dict, reward, terminated, info
-
-    def _reset_track_stats(self):
-        self._score = 0
-        self._episode_steps = 0
-        self._fake_episode_steps = 0
-
-    def _fake_step(self, bad_episode):
-        self._fake_episode_steps += 1
-        obs = self._empty_obs.copy()
-        info = {
-            "won": [self.win_counted for _ in range(self.n_agents)],
-            'score': self._score,
-            'epslen': self._episode_steps,
-            'game_over': self._fake_episode_steps == self.max_episode_steps,
-            'extra_padding': self._fake_episode_steps - self._episode_steps, 
-            'bad_episode': bad_episode
-        }
-
-        return obs, 0, True, info
+        if terminated:
+            dones = np.ones(self.n_agents, np.bool)
+        else:
+            dones = np.array(self.death_tracker_ally, np.bool)
+        assert dones.shape[0] == self.n_agents, dones.shape
+        return obs_dict, reward, dones, info
 
     def get_agent_action(self, a_id, action):
         """Construct the action for agent a_id."""

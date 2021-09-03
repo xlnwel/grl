@@ -1,4 +1,5 @@
-import os, random
+import os, sys
+import random
 import itertools
 import collections
 import ast
@@ -79,11 +80,13 @@ def moments(x, axis=None, mask=None):
         else:
             axis = (axis,) if isinstance(axis, int) else tuple(axis)
         assert mask.ndim == len(axis), (mask.shape, axis)
+        # compute valid entries in x corresponding to True in mask
+        n = np.sum(mask)
+        if n == 0:
+            return 0, 0
         # the following process is about 5x faster than np.nan*
         # expand mask to match the dimensionality of x
         mask = expand_dims_match(mask, x)
-        # compute valid entries in x corresponding to True in mask
-        n = np.sum(mask)
         for i in axis:
             if mask.shape[i] != 1:
                 assert mask.shape[i] == x.shape[i], (

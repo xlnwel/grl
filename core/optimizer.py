@@ -99,6 +99,7 @@ class Optimizer(tf.Module):
         logger.info(f'Apply weight decay with coefficient: {self._weight_decay}')
         for var in self._variables:
             if re.search(self._wdpattern, var.name):
+                print(var.name, self._weight_decay)
                 var.assign((1 - self._weight_decay) * var)
 
 if __name__ == '__main__':

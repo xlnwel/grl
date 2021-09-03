@@ -220,16 +220,19 @@ class Logger:
         stats = {}
         for k in sorted(self._store_dict):
             v = self._store_dict[k]
+            k_std, k_min, k_max = std, min, max
+            if k.startswith('train/'):
+                k_std = k_min = k_max = True
             if isscalar(v):
                 stats[k] = v
                 continue
             if mean:
                 stats[f'{k}'] = np.mean(v).astype(np.float32)
-            if std:
+            if k_std:
                 stats[f'{k}_std'] = np.std(v).astype(np.float32)
-            if min:
+            if k_min:
                 stats[f'{k}_min'] = np.min(v).astype(np.float32)
-            if max:
+            if k_max:
                 stats[f'{k}_max'] = np.max(v).astype(np.float32)
         self._store_dict.clear()
         return stats

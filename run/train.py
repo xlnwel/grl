@@ -37,7 +37,7 @@ def get_config(algo, env):
             # if suffix meets any config in the dir, we add it to filename
             filename = f'{word}_{filename}'
         return filename
-    algo_dir = pkg.get_package(algo, 0, '/')
+    algo_dir = pkg.get_package_from_algo(algo, 0, '/')
     if env == '' and '-' in algo:
         pwc('Config Warning: set Procgen as the default env, otherwise specify env explicitly', color='green')
         env = 'procgen_'
@@ -174,10 +174,7 @@ if __name__ == '__main__':
                     delay=cmd_args.delay)
 
                 if cmd_args.grid_search:
-                    if 'sac' in algo:
-                        processes += gs()
-                    else:
-                        processes += gs()
+                    processes += gs()
                 else:
                     processes += gs()
             else:

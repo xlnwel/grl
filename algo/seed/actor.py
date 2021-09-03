@@ -9,12 +9,11 @@ import ray
 
 from utility.ray_setup import cpu_affinity
 from utility.utils import Every, config_attr, batch_dicts
-from utility.rl_utils import compute_act_eps
 from utility.timer import Timer
+from utility.typing import EnvOutput
 from utility import pkg
 from core.tf_config import *
 from env.func import create_env
-from env.cls import EnvOutput
 from replay.func import create_local_buffer
 from algo.apex.actor import config_actor, get_learner_class, \
     get_worker_base_class, get_evaluator_class, \

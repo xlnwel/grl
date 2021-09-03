@@ -2,7 +2,7 @@
 env:
     name: &env_name smac_3s5z_vs_3s6z
     n_workers: 8
-    n_envs: &nenvs 1
+    n_envs: &nenvs 2
     use_state_agent: True
     use_mustalive: True
     add_center_xy: True
@@ -48,15 +48,15 @@ model:
         kernel_initializer: orthogonal
 
 agent:
-    algorithm: &algo mappo
+    algorithm: &algo mappo1
     precision: 32
     gamma: &gamma .99
 
     MAX_STEPS: 1e8
-    N_STEPS: &nsteps 400
     N_EPOCHS: &nepochs 5
-    N_VALUE_EPOCHS: 0
+    N_VALUE_EPOCHS: &nval_epochs 0
     N_MBS: &nmbs 1
+    batch_size: &bs 1024
     sample_size: &ss 10       # BPTT length
     LOG_PERIOD: 20
     EVAL_PERIOD: 2000
@@ -68,6 +68,7 @@ agent:
     obs_names: [obs, global_state]
     normalize_obs: True
     normalize_reward: True
+    normalize_reward_with_return: forward
     store_state: True
     # (once, reuse, null)
     # "once" updates values at the end of each epoch
@@ -103,9 +104,11 @@ buffer:
     gamma: *gamma
     lam: .95
     n_envs: *nenvs
-    N_STEPS: *nsteps
+    batch_size: *bs
     N_EPOCHS: *nepochs
+    N_VALUE_EPOCHS: *nval_epochs
     N_MBS: *nmbs        # number of minibatches
     sample_size: *ss
     norm_adv: batch
     # mini-batch size = n_workers * n_envs * epslen / n_mbs
+    sample_keys: [obs, global_state, action, value, traj_ret, advantage, logpi, mask, action_mask, life_mask, actor_h, actor_c, value_h, value_c]

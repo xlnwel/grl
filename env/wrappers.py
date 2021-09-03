@@ -2,17 +2,14 @@ import collections
 import logging
 import numpy as np
 import gym
+import cv2
 
 from utility.utils import infer_dtype, convert_dtype
-import cv2
+from utility.typing import EnvOutput, GymOutput
+
 # stop using GPU
 cv2.ocl.setUseOpenCL(False)
 logger = logging.getLogger(__name__)
-
-# for multi-processing efficiency, we do not return info at every step
-EnvOutput = collections.namedtuple('EnvOutput', 'obs reward discount reset')
-# Output format of gym
-GymOutput = collections.namedtuple('GymOutput', 'obs reward discount')
 
 
 def post_wrap(env, config):
@@ -26,29 +23,6 @@ def post_wrap(env, config):
         auto_reset=config.get('auto_reset', True))
     return env
 
-
-class DummyEnv:
-    """ Useful to break the inheritance of unexpected attributes.
-    For example, control tasks in gym by default use frame_skip=4,
-    but we usually don't count these frame skips in practice.
-    """
-    def __init__(self, env):
-        self.env = env
-        self.observation_space = env.observation_space
-        self.action_space = env.action_space
-        self.spec = env.spec
-        self.reward_range = env.reward_range
-        self.metadata = env.metadata
-
-        self.reset = env.reset
-        self.step = env.step
-        self.render = env.render
-        self.close = env.close
-        self.seed = env.seed
-
-    @property
-    def is_multiagent(self):
-        return getattr(self.env, 'is_multiagent', False)
 
 """ Wrappers from OpenAI's baselines. 
 Some modifications are done to meet specific requirements """
@@ -328,7 +302,8 @@ class DataProcess(gym.Wrapper):
         self.precision = precision
         self.float_dtype = np.float32 if precision == 32 else np.float16
 
-        self.is_action_discrete = isinstance(self.action_space, gym.spaces.Discrete)
+        self.is_action_discrete = getattr(self.env, 'is_action_discrete',
+            isinstance(self.action_space, gym.spaces.Discrete))
         if not self.is_action_discrete and precision == 16:
             self.action_space = gym.spaces.Box(
                 self.action_space.low, self.action_space.high, 

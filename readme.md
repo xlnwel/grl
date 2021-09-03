@@ -1,4 +1,4 @@
-## Distributed Deep Reinforcement Learning (D2RL)
+## GRL (Game of Reinforcement Learning/General Purpose Reinforcement Learning)
 
 A modulated and versatile library for deep reinforcement learning, implemented in *Tensorflow2.4*.
 
@@ -55,6 +55,11 @@ All implementation details from OpenAI's baselines are implemented for PPO famil
 
 - [x] AIRL
 - [x] GAIL
+
+### Multi-Agent Reinforcement Learning
+
+- [x] QMIX
+- [x] Multi-Agent PPO
 
 ### Networks
 

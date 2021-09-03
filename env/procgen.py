@@ -2,9 +2,10 @@ import gym
 
 from procgen.env import ENV_NAMES as VALID_ENV_NAMES
 from env import wrappers
+from env.utils import process_single_agent_env
 
 
-def make_procgen_env(config):
+def make_procgen(config):
     assert 'procgen' in config['name'], config['name']
     gray_scale = config.setdefault('gray_scale', False)
     frame_skip = config.setdefault('frame_skip', 1)
@@ -19,7 +20,8 @@ def make_procgen_env(config):
     config.setdefault('max_episode_steps', env.spec.max_episode_steps)
     if config['max_episode_steps'] is None:
         config['max_episode_steps'] = int(1e9)
-    # env = HeistActionWrapper(env)
+    env = process_single_agent_env(env, config)
+    
     return env
 
 class Procgen(gym.Env):

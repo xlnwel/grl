@@ -3,9 +3,9 @@ import tensorflow as tf
 
 from utility.tf_utils import explained_variance
 from utility.rl_loss import huber_loss, reduce_mean, ppo_loss, ppo_value_loss
+from utility.typing import EnvOutput
 from core.base import RMSAgentBase
 from core.decorator import override
-from env.wrappers import EnvOutput
 
 
 logger = logging.getLogger(__name__)
@@ -25,7 +25,8 @@ class PPOBase(RMSAgentBase):
 
         self._last_obs = None   # we record last obs before training to compute the last value
         self._value_update = getattr(self, '_value_update', None)
-        self._batch_size = env.n_envs * self.N_STEPS // self.N_MBS
+        if not hasattr(self, '_batch_size'):
+            self._batch_size = env.n_envs * self.N_STEPS // self.N_MBS
 
     """ Standard PPO methods """
     def before_run(self, env):
@@ -110,6 +111,7 @@ class PPOBase(RMSAgentBase):
             for j in range(1, self.N_MBS+1):
                 with self._sample_timer:
                     data = self._sample_data()
+
                 data = {k: tf.convert_to_tensor(v) for k, v in data.items()}
 
                 with self._learn_timer:
@@ -144,7 +146,7 @@ class PPOBase(RMSAgentBase):
         n = i * self.N_MBS + j
         self.store(**{
             'train/kl': kl,
-            'train/policy_updates': n,
+            'stats/policy_updates': n,
             'train/value': value,
             'time/sample_mean': self._sample_timer.average(),
             'time/learn_mean': self._learn_timer.average(),

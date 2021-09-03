@@ -90,8 +90,9 @@ class RMS:
             getattr(self, '_obs_normalized_axis', (0,)))
         self._normalize_obs = getattr(self, '_normalize_obs', False)
         self._normalize_reward = getattr(self, '_normalize_reward', False)
-        self._normalize_reward_with_reversed_return = \
-            getattr(self, '_normalize_reward_with_reversed_return', True)
+        self._normalize_reward_with_return = \
+            getattr(self, '_normalize_reward_with_return', 'reversed')
+        assert self._normalize_reward_with_return in ('reversed', 'forward', None)
         
         self._obs_names = getattr(self, '_obs_names', ['obs'])
         if self._normalize_obs:
@@ -108,17 +109,19 @@ class RMS:
             and RunningMeanStd(self._reward_normalized_axis, 
                 clip=getattr(self, '_rew_clip', 10), 
                 name='reward_rms', ndim=0)
-        if self._normalize_reward_with_reversed_return:
-            self._reverse_return = 0
+        if self._normalize_reward_with_return is not None:
+            self._return = 0
         else:
-            self._reverse_return = -np.inf
+            self._return = -np.inf
         self._rms_path = f'{self._root_dir}/{self._model_name}/rms.pkl'
 
         logger.info(f'Observation normalization: {self._normalize_obs}')
         logger.info(f'Normalized observation names: {self._obs_names}')
         logger.info(f'Reward normalization: {self._normalize_reward}')
-        logger.info(f'Reward normalization with reversed return: '
-                    f'{self._normalize_reward_with_reversed_return}')
+        logger.info(f'Reward normalization with return: '
+                    f'{self._normalize_reward_with_return}')
+        if self._normalize_reward_with_return:
+            logger.info(f"Reward normalization axis: {'1st' if self._normalize_reward_with_return == 'forward' else '2nd'}")
 
     def _process_obs(self, obs, update_rms=True, mask=None):
         """ Do obs normalization if required
@@ -138,7 +141,8 @@ class RMS:
         else:
             self.update_obs_rms(obs, mask=mask)
             obs = self.normalize_obs(obs, mask=mask)
-    
+        return obs
+
     """ Functions for running mean and std """
     def set_rms_stats(self, obs_rms={}, rew_rms=None):
         if obs_rms:
@@ -180,10 +184,36 @@ class RMS:
             self._obs_rms[name].update(obs, mask=mask)
 
     def update_reward_rms(self, reward, discount=None, mask=None):
+        def forward_discounted_sum(next_ret, reward, discount, gamma):
+            assert reward.shape == discount.shape, (reward.shape, discount.shape)
+            # we assume the sequential dimension is at the first axis
+            nstep = reward.shape[0]
+            ret = np.zeros_like(reward)
+            for t in reversed(range(nstep)):
+                ret[t] = next_ret = reward[t] + gamma * discount[t] * next_ret
+            return next_ret, ret
+
+        def backward_discounted_sum(prev_ret, reward, discount, gamma):
+            """ Compute the discounted sum of rewards in the reverse order """
+            assert reward.shape == discount.shape, (reward.shape, discount.shape)
+            if reward.ndim == 1:
+                prev_ret = reward + gamma * prev_ret
+                ret = prev_ret.copy()
+                prev_ret *= discount
+                return prev_ret, ret
+            else:
+                # we assume the sequential dimension is at the second axis
+                nstep = reward.shape[1]
+                ret = np.zeros_like(reward)
+                for t in range(nstep):
+                    ret[:, t] = prev_ret = reward[:, t] + gamma * prev_ret
+                    prev_ret *= discount[:, t]
+                return prev_ret, ret
+
         if self._normalize_reward:
             assert len(reward.shape) == len(self._reward_normalized_axis), \
                 (reward.shape, self._reward_normalized_axis)
-            if self._normalize_reward_with_reversed_return:
+            if self._normalize_reward_with_return == 'reversed':
                 """
                 Pseudocode can be found in https://arxiv.org/pdf/1811.02553.pdf
                 section 9.3 (which is based on our Baselines code, haha)
@@ -199,8 +229,12 @@ class RMS:
                     f"Normalizing rewards with reversed return requires environment's reset signals"
                 assert reward.ndim == discount.ndim == len(self._reward_rms.axis), \
                     (reward.shape, discount.shape, self._reward_rms.axis)
-                self._reverse_return, ret = backward_discounted_sum(
-                    self._reverse_return, reward, discount, self._gamma)
+                self._return, ret = backward_discounted_sum(
+                    self._return, reward, discount, self._gamma)
+                self._reward_rms.update(ret, mask=mask)
+            elif self._normalize_reward_with_return == 'forward':
+                self._return, ret = forward_discounted_sum(
+                    self._return, reward, discount, self._gamma)
                 self._reward_rms.update(ret, mask=mask)
             else:
                 self._reward_rms.update(reward, mask=mask)
@@ -227,22 +261,6 @@ class RMS:
                 batch_mean=rew_rms.mean,
                 batch_var=rew_rms.var,
                 batch_count=rew_rms.count)
-
-def backward_discounted_sum(prev_ret, reward, discount, gamma):
-    """ Compute the discounted sum of rewards in the reverse order"""
-    assert reward.ndim == discount.ndim, (reward.shape, discount.shape)
-    if reward.ndim == 1:
-        prev_ret = reward + gamma * prev_ret
-        ret = prev_ret.copy()
-        prev_ret *= discount
-        return prev_ret, ret
-    else:
-        nstep = reward.shape[1]
-        ret = np.zeros_like(reward)
-        for t in range(nstep):
-            ret[:, t] = prev_ret = reward[:, t] + gamma * prev_ret
-            prev_ret *= discount[:, t]
-        return prev_ret, ret
 
 
 """ According to Python's MRO, the following classes should be positioned 

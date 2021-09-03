@@ -5,15 +5,19 @@ os.environ.setdefault('PATH', '')
 import gym
 from gym.spaces.box import Box
 import cv2
+
+from env.utils import process_single_agent_env
+
 cv2.ocl.setUseOpenCL(False)
 
 
 
-def make_atari_env(config):
+def make_atari(config):
     assert 'atari' in config['name'], config['name']
     env = Atari(**config)
     config.setdefault('max_episode_steps', 108000)    # 30min
-
+    env = process_single_agent_env(env, config)
+    
     return env
 
 class Atari:

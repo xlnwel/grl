@@ -3,6 +3,8 @@ import psutil
 import ray
 
 from utility.display import pwc
+from core.tf_config import *
+
 
 def sigint_shutdown_ray():
     """ Shutdown ray when the process is terminated by ctrl+C """
@@ -33,3 +35,14 @@ def gpu_affinity(name=None):
 
 def get_num_cpus():
     return len(ray.get_resource_ids()['CPU'])
+
+def config_actor(name, config, gpu_idx=0):
+    cpu_affinity(name)
+    gpu_affinity(name)
+    silence_tf_logs()
+    num_cpus = get_num_cpus()
+    configure_threads(num_cpus, num_cpus)
+    use_gpu = configure_gpu(gpu_idx)
+    if not use_gpu and 'precision' in config:
+        config['precision'] = 32
+    configure_precision(config.get('precision', 32))
