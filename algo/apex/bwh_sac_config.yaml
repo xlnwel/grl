@@ -52,7 +52,7 @@ agent:
     loss_type: mse                          # huber or mse
 
     # arguments for optimizer
-    optimizer: adam
+    opt_name: adam
     schedule_lr: False
     actor_lr: 1e-4
     value_lr: 1e-4

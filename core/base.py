@@ -148,7 +148,7 @@ class AgentBase(AgentImpl):
                 lr = TFPiecewiseSchedule(self._lr)
             else:
                 lr = self._lr
-        opt = opt or getattr(self, '_optimizer', 'adam')
+        opt = opt or getattr(self, '_opt_name', 'adam')
         l2_reg = l2_reg or getattr(self, '_l2_reg', None)
         weight_decay = weight_decay or getattr(self, '_weight_decay', None)
         clip_norm = clip_norm or getattr(self, '_clip_norm', None)
@@ -304,9 +304,9 @@ class RMSAgentBase(RMS, AgentBase):
             with open(self._rms_path, 'rb') as f:
                 self._obs_rms, self._reward_rms, self._return = cloudpickle.load(f)
                 logger.info(f'rms stats are restored from {self._rms_path}')
-        assert self._reward_rms.axis == self._reward_normalized_axis, (self._reward_rms.axis, self._reward_normalized_axis)
-        for v in self._obs_rms.values():
-            assert v.axis == self._obs_normalized_axis, (v.axis, self._obs_normalized_axis)
+            assert self._reward_rms.axis == self._reward_normalized_axis, (self._reward_rms.axis, self._reward_normalized_axis)
+            for v in self._obs_rms.values():
+                assert v.axis == self._obs_normalized_axis, (v.axis, self._obs_normalized_axis)
         super().restore()
 
     @override(AgentBase)

@@ -215,7 +215,8 @@ class Buffer:
     def _process_sample(self, sample):
         if 'advantage' in sample and self._norm_adv == 'minibatch':
             sample['advantage'] = standardize(
-                sample['advantage'], mask=sample['life_mask'], epsilon=self._epsilon)
+                sample['advantage'], mask=sample.get('life_mask'), 
+                epsilon=self._epsilon)
         return sample
     
     def _post_process_for_dataset(self):
@@ -230,10 +231,10 @@ class Buffer:
     def compute_mean_max_std(self, name):
         stats = self._memory[name]
         return {
-            name: np.mean(stats),
-            f'{name}_max': np.max(stats),
-            f'{name}_min': np.min(stats),
-            f'{name}_std': np.std(stats),
+            f'stats/{name}': np.mean(stats),
+            f'stats/{name}_max': np.max(stats),
+            f'stats/{name}_min': np.min(stats),
+            f'stats/{name}_std': np.std(stats),
         }
 
     def compute_fraction(self, name):

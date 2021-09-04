@@ -34,7 +34,8 @@ class PPOBase(RMSAgentBase):
 
     def record_last_env_output(self, env_output):
         self._env_output = EnvOutput(
-            self.normalize_obs(env_output.obs), *env_output[1:])
+            self.normalize_obs(env_output.obs), env_output.reward,
+            env_output.discount, env_output.reset)
 
     def compute_value(self, obs=None):
         # be sure you normalize obs first if obs normalization is required
@@ -145,8 +146,8 @@ class PPOBase(RMSAgentBase):
 
         n = i * self.N_MBS + j
         self.store(**{
-            'train/kl': kl,
             'stats/policy_updates': n,
+            'train/kl': kl,
             'train/value': value,
             'time/sample_mean': self._sample_timer.average(),
             'time/learn_mean': self._learn_timer.average(),

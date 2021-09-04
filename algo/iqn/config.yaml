@@ -57,7 +57,7 @@ agent:
     tbo: False
     
     # arguments for optimizer
-    optimizer: adam
+    opt_name: adam
     schedule_lr: False
     value_lr: 5e-5
     clip_norm: 40

@@ -59,7 +59,7 @@ agent:
     RECORD: True
     
     # arguments for optimizer
-    optimizer: adam
+    opt_name: adam
     schedule_lr: False
     actor_lr: 5e-4
     value_lr: 5e-4

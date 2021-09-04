@@ -69,7 +69,7 @@ agent:
     RECORD: True
 
     # arguments for optimizer
-    optimizer: adam
+    opt_name: adam
     clip_norm: 100.
     weight_decay: 0.
     model_lr: 6e-4

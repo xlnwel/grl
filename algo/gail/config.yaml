@@ -33,7 +33,7 @@ agent:
 
     MAX_STEPS: 1e10
     N_STEPS: &nsteps 100
-    N_EPOCHS: 50
+    N_EPOCHS: &nepochs 50
     N_MBS: &nmbs 1
     LOG_PERIOD: 200
     EVAL_PERIOD: 2000
@@ -50,7 +50,7 @@ agent:
     RECORD: False
 
     # arguments for optimizer
-    optimizer: adam
+    opt_name: adam
     schedule_lr: False
     lr: 3e-4
     disc_lr: 3e-4
@@ -68,6 +68,7 @@ buffer:
     lam: .97
     n_envs: *nenvs
     N_STEPS: *nsteps
+    N_EPOCHS: *nepochs
     N_MBS: *nmbs        # number of minibatches
     sample_keys: [obs, action, value, traj_ret, advantage, logpi]
     # mini-batch size = n_workers * n_envs * epslen / n_mbs

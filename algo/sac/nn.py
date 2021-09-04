@@ -34,7 +34,9 @@ class Actor(Module):
         raw_action = dist.mode() if evaluation else dist.sample()
         action = tf.tanh(raw_action)
         if evaluation:
-            return action
+            raw_logpi = dist.log_prob(raw_action)
+            logpi = logpi_correction(raw_action, raw_logpi, is_action_squashed=False)
+            return action, {'logpi': logpi}
         if isinstance(epsilon, tf.Tensor) or epsilon:
             action = epsilon_greedy(action, epsilon, False)
 

@@ -58,7 +58,7 @@ agent:
     RECORD: False
     
     # arguments for optimizer
-    optimizer: adam
+    opt_name: adam
     schedule_lr: False
     lr: 3e-4
     clip_norm: .5

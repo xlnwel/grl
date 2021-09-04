@@ -68,7 +68,7 @@ class Replay(ABC):
 
     def save(self):
         if self._save:
-            if self._save_temp:
+            if self._save_temp and hasattr(self, '_tmp_buf'):
                 data = self._tmp_buf.retrieve()
                 self.merge(data)
             size = len(self)

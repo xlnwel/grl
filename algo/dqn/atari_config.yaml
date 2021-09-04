@@ -50,7 +50,7 @@ agent:
     tbo: False                              # transformed Bellman Operator
     
     # arguments for optimizer
-    optimizer: adam
+    opt_name: adam
     schedule_lr: False
     lr: 5e-5
     clip_norm: 10

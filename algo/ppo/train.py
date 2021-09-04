@@ -80,7 +80,7 @@ def train(agent, env, eval_env, buffer):
         if to_log(agent.train_step) and agent.contains_stats('score'):
             with lt:
                 agent.store(**{
-                    'train_step': agent.train_step,
+                    'stats/train_step': agent.train_step,
                     'time/run': rt.total(), 
                     'time/train': tt.total(),
                     'time/eval': et.total(),

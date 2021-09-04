@@ -84,7 +84,7 @@ agent:
     RECORD: False
     
     # arguments for optimizer
-    optimizer: adam
+    opt_name: adam
     schedule_lr: False
     actor_lr: 7e-4
     value_lr: 7e-4

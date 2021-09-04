@@ -1,4 +1,3 @@
-import logging
 import numpy as np
 
 from core.tf_config import *
@@ -13,8 +12,7 @@ from replay.func import create_replay
 
 def main(env_config, model_config, agent_config, replay_config,
         n, record=False, size=(128, 128), video_len=1000, 
-        fps=30, save=False):
-    logging.basicConfig(level=logging.DEBUG)
+        force_envvec=False, fps=30, save=False):
     silence_tf_logs()
     configure_gpu()
     configure_precision(agent_config.get('precision', 32))
@@ -32,7 +30,7 @@ def main(env_config, model_config, agent_config, replay_config,
         env_config['log_episode'] = True
         env_config['n_workers'] = env_config['n_envs'] = 1
 
-    env = create_env(env_config)
+    env = create_env(env_config, force_envvec=force_envvec)
 
     create_model, Agent = pkg.import_agent(config=agent_config)
 
