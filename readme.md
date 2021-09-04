@@ -1,4 +1,4 @@
-## GRL (Game of Reinforcement Learning/General Purpose Reinforcement Learning)
+## GRL (Game of Reinforcement Learning/General-Purpose Reinforcement Learning)
 
 A modulated and versatile library for deep reinforcement learning, implemented in *Tensorflow2.4*.
 
